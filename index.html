@@ -806,8 +806,10 @@
     .product-item-meta{font-size:0.73rem;color:var(--text-muted);}
     .product-item-actions{display:flex;gap:6px;flex-shrink:0;}
     /* 明細購入記録 */
-    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:center;}
+    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:start;}
     .purchase-item-row select,.purchase-item-row input{font-size:0.8rem;}
+    .product-input-wrapper{display:flex;flex-direction:column;gap:4px;}
+    .product-input-wrapper select,.product-input-wrapper input[type="text"]{font-size:0.8rem;width:100%;}
     @media(max-width:480px){.purchase-item-row{grid-template-columns:1fr 68px 48px 28px;gap:4px;}}
     /* 価格比較テーブル */
     .price-table{width:100%;border-collapse:collapse;font-size:0.8rem;margin-top:6px;}
@@ -816,6 +818,7 @@
     .price-table tr.cheapest td{color:var(--accent);font-weight:700;}
     .price-table .trend-up{color:var(--danger);font-size:0.72rem;}
     .price-table .trend-down{color:#4ade80;font-size:0.72rem;}
+    .price-table .rank-col{text-align:center;font-size:0.9rem;padding:7px 4px;width:28px;}
     .cycle-badge{font-size:0.72rem;color:var(--text-muted);margin-top:2px;}
     .cycle-badge.due{color:#fbbf24;}
     /* 節約余地カード */
@@ -1284,6 +1287,10 @@
               <label class="field-label">よく買う店（カンマ区切り・任意）</label>
               <input type="text" id="productPlaces" class="input-base" placeholder="例：ヤオコー中野島店、業務スーパー"/>
             </div>
+            <div class="input-field mt-4">
+              <label class="field-label">参考価格（円・任意）</label>
+              <input type="number" id="productPrice" class="input-base" placeholder="例：198" min="0" step="1"/>
+            </div>
             <div class="form-actions mt-4">
               <button class="btn-outline" id="productFormCancelBtn">キャンセル</button>
               <button class="btn-primary" id="productSaveBtn"><span class="icon">💾</span> 保存</button>
@@ -1325,7 +1332,7 @@
             </div>
             <!-- 列ヘッダー -->
             <div class="purchase-item-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">
-              <span>商品</span><span>価格(¥)</span><span>数量</span><span></span>
+              <span>商品（新規入力可）</span><span>価格(¥)</span><span>数量</span><span></span>
             </div>
             <div id="purchaseItemsContainer"></div>
           </div>
@@ -2324,8 +2331,9 @@
         const name = row.querySelector(".ocr-item-name").value.trim() || "新規商品";
         if (!confirm(`「${name}」を商品マスタに新規登録しますか？`)) { e.target.value = ""; return; }
         try {
+          const initPrice = parseFloat(row.querySelector(".ocr-item-price")?.value) || 0;
           const ref = await addDoc(productsCollectionRef, {
-            name, category: "食品・食事", note: "", places: [], createdAt: serverTimestamp()
+            name, category: "食品・食事", note: "", places: [], price: initPrice, createdAt: serverTimestamp()
           });
           const opt = document.createElement("option");
           opt.value = ref.id; opt.textContent = name; opt.selected = true;
@@ -2359,11 +2367,21 @@
       try {
         await savePurchaseToFirestore({ date, store, total, memo: document.getElementById("ocrMemo").value.trim(), items });
         for (const item of items) {
-          if (!item.productId) continue;
-          const prod = products.find(p => p.id === item.productId);
-          const cur = prod?.places || [];
-          if (!cur.includes(store)) {
-            await updateDoc(doc(productsCollectionRef, item.productId), { places: [...cur, store] });
+          if (item.productId) {
+            const prod = products.find(p => p.id === item.productId);
+            const cur = prod?.places || [];
+            const upd = { price: item.price };
+            if (!cur.includes(store)) upd.places = [...cur, store];
+            await updateDoc(doc(productsCollectionRef, item.productId), upd);
+          } else if (item.name && item.name !== "不明") {
+            await addDoc(productsCollectionRef, {
+              name: item.name,
+              category: item.category || "食品・食事",
+              note: "",
+              price: item.price,
+              places: [store],
+              createdAt: serverTimestamp(),
+            });
           }
         }
         switchScreen("dashboard");
@@ -2418,7 +2436,7 @@
         div.innerHTML = `
           <div class="product-item-info">
             <span class="product-item-name">${escapeHTML(p.name)}</span>
-            <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}</span>
+            <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}${p.price ? " · 参考 ¥" + p.price.toLocaleString() : ""}</span>
             ${placesHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">${placesHtml}</div>` : ""}
             ${cycleHtml}
           </div>
@@ -2436,6 +2454,7 @@
       document.getElementById("productCategory").value = product ? (product.category || "食品・食事") : "食品・食事";
       document.getElementById("productNote").value = product ? (product.note || "") : "";
       document.getElementById("productPlaces").value = (product?.places || []).join("、");
+      document.getElementById("productPrice").value = product?.price || "";
       document.getElementById("productForm").style.display = "block";
       document.getElementById("productName").focus();
     }
@@ -2454,6 +2473,7 @@
         note: document.getElementById("productNote").value.trim(),
         places: document.getElementById("productPlaces").value
           .split(/[、,，]/).map(s => s.trim()).filter(Boolean),
+        price: parseInt(document.getElementById("productPrice").value) || 0,
       };
       try {
         await saveProductToFirestore(data);
@@ -2469,7 +2489,7 @@
     function renderPurchaseFormProductOptions() {
       document.querySelectorAll(".product-select").forEach(sel => {
         const cur = sel.value;
-        sel.innerHTML = '<option value="">商品を選択...</option>';
+        sel.innerHTML = '<option value="">商品を選択...</option><option value="__new__">＋ 新規入力...</option>';
         products.forEach(p => {
           const opt = document.createElement("option");
           opt.value = p.id;
@@ -2485,10 +2505,26 @@
       const row = document.createElement("div");
       row.className = "purchase-item-row";
       row.innerHTML = `
-        <select class="input-base product-select"><option value="">商品を選択...</option>${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select>
+        <div class="product-input-wrapper">
+          <select class="input-base product-select">
+            <option value="">商品を選択...</option>
+            <option value="__new__">＋ 新規入力...</option>
+            ${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}
+          </select>
+          <input type="text" class="input-base product-name-input" placeholder="商品名を入力" style="display:none;"/>
+        </div>
         <input type="number" class="input-base item-price" placeholder="0" min="0" inputmode="decimal"/>
         <input type="number" class="input-base item-qty" placeholder="1" min="1" value="1" inputmode="decimal"/>
         <button class="btn-danger item-remove-btn" style="padding:4px 6px;min-height:0;">✕</button>`;
+      row.querySelector(".product-select").addEventListener("change", (e) => {
+        const nameInput = row.querySelector(".product-name-input");
+        if (e.target.value === "__new__") {
+          nameInput.style.display = "";
+          nameInput.focus();
+        } else {
+          nameInput.style.display = "none";
+        }
+      });
       row.querySelector(".item-price").addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-qty").addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-remove-btn").addEventListener("click", () => { row.remove(); recalcPurchaseTotal(); });
@@ -2524,12 +2560,25 @@
       const items = [];
       let total = 0;
       for (const row of rows) {
-        const productId = row.querySelector(".product-select").value;
+        const sel = row.querySelector(".product-select");
+        if (!sel) continue;
+        const isNew = sel.value === "__new__";
+        const productId = isNew ? "" : sel.value;
         const price = parseFloat(row.querySelector(".item-price").value) || 0;
         const qty = parseFloat(row.querySelector(".item-qty").value) || 1;
-        if (!productId && price === 0) continue;
-        const product = products.find(p => p.id === productId);
-        items.push({ productId, name: product ? product.name : "不明", price, qty, category: product ? product.category : "未分類" });
+        let name, category;
+        if (isNew) {
+          name = row.querySelector(".product-name-input")?.value.trim() || "";
+          category = "食品・食事";
+          if (!name) continue;
+        } else {
+          const product = products.find(p => p.id === productId);
+          name = product ? product.name : (productId ? "不明" : "");
+          category = product ? product.category : "未分類";
+          if (!productId && price === 0) continue;
+          if (!name) name = "不明";
+        }
+        items.push({ productId, name, price, qty, category });
         total += price * qty;
       }
       if (items.length === 0) { alert("明細を1行以上入力してください。"); return; }
@@ -2537,11 +2586,21 @@
       try {
         await savePurchaseToFirestore(data);
         for (const item of items) {
-          if (!item.productId) continue;
-          const prod = products.find(p => p.id === item.productId);
-          const cur = prod?.places || [];
-          if (!cur.includes(store)) {
-            await updateDoc(doc(productsCollectionRef, item.productId), { places: [...cur, store] });
+          if (item.productId) {
+            const prod = products.find(p => p.id === item.productId);
+            const cur = prod?.places || [];
+            const upd = { price: item.price };
+            if (!cur.includes(store)) upd.places = [...cur, store];
+            await updateDoc(doc(productsCollectionRef, item.productId), upd);
+          } else if (item.name && item.name !== "不明") {
+            await addDoc(productsCollectionRef, {
+              name: item.name,
+              category: item.category || "食品・食事",
+              note: "",
+              price: item.price,
+              places: [store],
+              createdAt: serverTimestamp(),
+            });
           }
         }
         switchScreen("dashboard");
@@ -2600,12 +2659,20 @@
         const isDue = cycle.daysSinceLast >= cycle.avgDays;
         cycleHtml = `<div class="cycle-badge${isDue ? ' due' : ''}" style="margin-bottom:10px;">🔔 購買周期：平均 <strong>${cycle.avgDays}日</strong> ごと（前回から <strong>${cycle.daysSinceLast}日</strong> 経過${isDue ? " ⚠️ 補充時期かも" : ""}）</div>`;
       }
-      const minPrice = stores[0].min;
+      const refProduct = products.find(p => p.id === productId);
+      let refPriceHtml = "";
+      if (refProduct?.price && stores.length > 0) {
+        const diff = refProduct.price - stores[0].min;
+        const diffStr = diff > 0 ? `参考より ¥${diff} 高い` : diff < 0 ? `参考より ¥${Math.abs(diff)} 安い` : "参考価格と同額";
+        refPriceHtml = `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">📋 参考価格（マスタ）: <strong>¥${refProduct.price.toLocaleString()}</strong> → 最安店は${diffStr}</div>`;
+      }
+      const rankSymbols = ['🥇','🥈','🥉'];
       const rows = stores.map((s, i) => {
+        const rank = i < 3 ? rankSymbols[i] : `${i+1}位`;
         const trendStr = s.trend !== null ? (s.trend > 0 ? `<span class="trend-up">↑ +¥${Math.abs(s.trend).toFixed(0)}/回</span>` : s.trend < 0 ? `<span class="trend-down">↓ -¥${Math.abs(s.trend).toFixed(0)}/回</span>` : "") : "";
-        return `<tr${i===0?' class="cheapest"':''}><td>${escapeHTML(s.store)}</td><td>${formatCurrencyYen(s.min)}${i===0?' 🏆':''}</td><td>${formatCurrencyYen(Math.round(s.avg))}</td><td>${formatCurrencyYen(s.latest)} ${trendStr}</td><td>${s.count}回</td></tr>`;
+        return `<tr${i===0?' class="cheapest"':''}><td class="rank-col">${rank}</td><td>${escapeHTML(s.store)}</td><td>${formatCurrencyYen(s.min)}</td><td>${formatCurrencyYen(Math.round(s.avg))}</td><td>${formatCurrencyYen(s.latest)} ${trendStr}</td><td>${s.count}回</td></tr>`;
       }).join("");
-      el.innerHTML = `${cycleHtml}<table class="price-table"><thead><tr><th>店名</th><th>最安値</th><th>平均</th><th>最新価格</th><th>回数</th></tr></thead><tbody>${rows}</tbody></table>`;
+      el.innerHTML = `${cycleHtml}${refPriceHtml}<table class="price-table"><thead><tr><th></th><th>店名</th><th>最安値</th><th>平均</th><th>最新価格</th><th>回数</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
 
     // ===== ML 分析関数 =====
