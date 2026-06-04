@@ -13,8 +13,8 @@ service cloud.firestore {
     function isAllowed() {
       return request.auth != null
           && request.auth.uid in [
-            "UID_1_ここに1人目のUIDを貼り付け",   // 例: "abc123xyz..."
-            "UID_2_ここに2人目のUIDを貼り付け"    // 例: "def456uvw..."
+            "oauPGkK9XwUjkJMiOGSer9NJJxu2",   // 本人（夫）
+            "ADoH8r9AtSMeF0KzL3XrSmGPkMU2"    // 妻
           ];
     }
 
