@@ -1,0 +1,11 @@
+# Firebase
+.firebaserc
+.firebase/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp

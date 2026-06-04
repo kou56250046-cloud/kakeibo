@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // 【セットアップ手順】
+    // 1. アプリにGoogleログインする
+    // 2. ダッシュボード上部のバナーに表示されるUIDをコピーする
+    // 3. 2人分のUIDを下記リストに貼り付ける
+    // 4. firebase deploy --only firestore:rules で再デプロイする
+    // ============================================================
+
+    function isAllowed() {
+      return request.auth != null
+          && request.auth.uid in [
+            "UID_1_ここに1人目のUIDを貼り付け",   // 例: "abc123xyz..."
+            "UID_2_ここに2人目のUIDを貼り付け"    // 例: "def456uvw..."
+          ];
+    }
+
+    // 家族データへのアクセスは許可された2人のみ
+    match /households/{householdId}/{document=**} {
+      allow read, write: if isAllowed();
+    }
+
+    // その他すべて拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

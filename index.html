@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>家計フロー・ナビ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#050816" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="家計フロー・ナビ" />
+
+  <!-- Chart.js（グラフ用） -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at top, #232b5d, #050816);
+      --card-bg: rgba(15, 23, 42, 0.9);
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.2);
+      --accent-strong: #f97316;
+      --border-subtle: rgba(148, 163, 184, 0.3);
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --danger: #fb7185;
+      --radius-xl: 18px;
+      --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.65);
+      --transition-fast: 0.18s ease-out;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1100px;
+      min-height: 100vh;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    @media (min-width: 768px) {
+      .app {
+        padding: 24px;
+      }
+    }
+
+    .app-header {
+      background: linear-gradient(
+          135deg,
+          rgba(56, 189, 248, 0.18),
+          transparent
+        ),
+        linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.6));
+      border-radius: 24px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      backdrop-filter: blur(22px);
+      position: sticky;
+      top: 8px;
+      z-index: 10;
+    }
+
+    .app-title-main {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .app-title-main span.logo-circle {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #f97316, #22d3ee);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.7);
+      display: inline-block;
+    }
+
+    .app-title-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .chip strong {
+      color: var(--text-main);
+    }
+
+    .nav-button {
+      border-radius: 999px;
+      padding: 7px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform var(--transition-fast),
+        box-shadow var(--transition-fast), background-color var(--transition-fast),
+        border-color var(--transition-fast);
+    }
+
+    .nav-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.9);
+      border-color: var(--accent);
+      background: rgba(15, 23, 42, 1);
+    }
+
+    .nav-button span.icon {
+      font-size: 1rem;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      display: none;
+      flex: 1;
+      animation: fadeIn 0.18s ease-out;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      .dashboard-grid {
+        grid-template-columns: 1.1fr 1fr;
+        align-items: start;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 16px 16px 14px;
+      backdrop-filter: blur(18px);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-title-accent {
+      width: 9px;
+      height: 22px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #38bdf8, #f97316);
+    }
+
+    .card-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .pill {
+      font-size: 0.75rem;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .btn-primary {
+      border-radius: 999px;
+      border: none;
+      padding: 11px 18px;
+      background: linear-gradient(135deg, #22d3ee, #f97316);
+      color: #0f172a;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 18px 40px rgba(8, 47, 73, 0.85);
+      transition: transform var(--transition-fast),
+        box-shadow var(--transition-fast), filter var(--transition-fast);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.95);
+      filter: brightness(1.04);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.9);
+    }
+
+    .btn-primary .icon {
+      font-size: 1rem;
+    }
+
+    .summary-main {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
+
+    .summary-main-amount {
+      font-size: 1.7rem;
+      font-weight: 700;
+    }
+
+    .summary-main-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .summary-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .summary-tag {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--text-muted);
+    }
+
+    .chart-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+      justify-content: flex-end;
+    }
+
+    .input-select {
+      border-radius: 999px;
+      padding: 4px 26px 4px 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      color: var(--text-main);
+      font-size: 0.8rem;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      position: relative;
+      background-image: linear-gradient(
+        45deg,
+        transparent 50%,
+        rgba(148, 163, 184, 0.9) 50%
+      ),
+        linear-gradient(135deg, rgba(148, 163, 184, 0.9) 50%, transparent 50%);
+      background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+    }
+
+    .chart-placeholder {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 26px 10px;
+      border-radius: var(--radius-xl);
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .history-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .history-item {
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: radial-gradient(
+          circle at top,
+          rgba(56, 189, 248, 0.18),
+          transparent
+        ),
+        rgba(15, 23, 42, 0.9);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      column-gap: 10px;
+      row-gap: 2px;
+      font-size: 0.8rem;
+      position: relative;
+    }
+
+    .history-category-chip {
+      align-self: start;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .history-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .history-amount {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .history-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .history-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .history-meta .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.9);
+    }
+
+    .history-memo {
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .history-actions {
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-ghost,
+    .btn-danger {
+      border-radius: 999px;
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background-color var(--transition-fast),
+        border-color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(30, 64, 175, 0.95);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      border-color: rgba(248, 113, 113, 0.9);
+      color: #fecaca;
+    }
+
+    .btn-danger:hover {
+      background: rgba(127, 29, 29, 0.95);
+      transform: translateY(-1px);
+    }
+
+    .screen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .screen-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .screen-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .category-btn {
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: radial-gradient(
+          circle at top,
+          rgba(56, 189, 248, 0.22),
+          transparent
+        ),
+        rgba(15, 23, 42, 0.98);
+      color: var(--text-main);
+      min-height: 66px;
+      padding: 8px 10px;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.9);
+      transition: transform var(--transition-fast),
+        box-shadow var(--transition-fast), border-color var(--transition-fast),
+        background-color var(--transition-fast);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .category-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle at top left,
+        rgba(248, 250, 252, 0.08),
+        transparent 55%
+      );
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+      pointer-events: none;
+    }
+
+    .category-btn:hover {
+      transform: translateY(-2px) translateZ(0);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.95);
+      border-color: var(--accent);
+    }
+
+    .category-btn:hover::after {
+      opacity: 1;
+    }
+
+    .category-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .category-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .category-icon {
+      font-size: 1.2rem;
+    }
+
+    .category-other-box {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px dashed rgba(148, 163, 184, 0.7);
+    }
+
+    .field-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .input-text {
+      width: 100%;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 7px 12px;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .input-text::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    @media (min-width: 600px) {
+      .form-grid-2col {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .input-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .input-base {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .input-base::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .entry-category-display {
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .entry-category-display span.dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
+    .btn-outline {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 8px 14px;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background-color var(--transition-fast),
+        border-color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .btn-outline:hover {
+      background: rgba(30, 64, 175, 0.95);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .badge-soft {
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: var(--accent-soft);
+      color: #e0f2fe;
+      font-size: 0.75rem;
+      border: 1px solid rgba(56, 189, 248, 0.6);
+    }
+
+    .mt-4 { margin-top: 8px; }
+    .mt-6 { margin-top: 12px; }
+    .mt-8 { margin-top: 16px; }
+
+    .insight-section {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.6);
+    }
+
+    .insight-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .insight-badge {
+      font-size: 0.7rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(56, 189, 248, 0.7);
+      color: #e0f2fe;
+    }
+
+    .insight-text {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .insight-highlight {
+      color: #fbbf24;
+      font-weight: 600;
+    }
+
+    /* === AUTH GATE === */
+    #authGate{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:var(--bg-gradient);transition:opacity .3s ease;}
+    .auth-card{background:rgba(15,23,42,.93);border:1px solid rgba(148,163,184,.38);border-radius:28px;padding:44px 36px 40px;display:flex;flex-direction:column;align-items:center;gap:22px;box-shadow:0 40px 100px rgba(0,0,0,.85);backdrop-filter:blur(28px);animation:authCardIn .7s cubic-bezier(.34,1.56,.64,1) both;max-width:380px;width:90%;}
+    @keyframes authCardIn{from{opacity:0;transform:translateY(40px) scale(.93)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .auth-logo{display:flex;align-items:center;gap:12px;font-size:1.45rem;font-weight:700;letter-spacing:.02em;}
+    .auth-logo-pulse{width:38px!important;height:38px!important;animation:logoPulse 2.4s ease-in-out infinite;}
+    @keyframes logoPulse{0%,100%{box-shadow:0 0 22px rgba(56,189,248,.65);transform:scale(1)}50%{box-shadow:0 0 60px rgba(249,115,22,.9),0 0 90px rgba(56,189,248,.35);transform:scale(1.07)}}
+    .auth-sub{font-size:.88rem;color:var(--text-muted);text-align:center;line-height:1.75;margin:0;}
+    .auth-btn{width:100%;justify-content:center;padding:14px 22px;font-size:1rem;}
+    .auth-error{font-size:.8rem;color:var(--danger);min-height:18px;text-align:center;}
+    /* === USER CHIP === */
+    .user-chip{max-width:150px;overflow:hidden;}
+    #userName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;font-size:.72rem;color:var(--text-main);}
+    /* === UID BANNER === */
+    .uid-banner{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.28);border-radius:14px;padding:13px 38px 13px 16px;font-size:.78rem;color:var(--text-muted);line-height:1.65;position:relative;margin-bottom:14px;animation:fadeIn .5s ease-out .2s both;}
+    .uid-banner strong{color:var(--accent);}
+    .uid-banner code{display:block;margin:7px 0 5px;padding:7px 12px;background:rgba(0,0,0,.35);border-radius:8px;font-family:"SF Mono","Fira Code","Courier New",monospace;font-size:.73rem;color:#fbbf24;word-break:break-all;user-select:all;}
+    .uid-banner-close{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;line-height:1;padding:2px;transition:color var(--transition-fast);}
+    .uid-banner-close:hover{color:var(--text-main);}
+    .uid-copy-btn{font-size:.72rem;padding:3px 11px;border-radius:999px;border:1px solid rgba(56,189,248,.4);background:rgba(56,189,248,.1);color:var(--accent);cursor:pointer;transition:background var(--transition-fast);}
+    .uid-copy-btn:hover{background:rgba(56,189,248,.18);}
+    /* === SCREEN TRANSITIONS === */
+    .screen.slide-right{animation:slideRight .22s ease-out;}
+    .screen.slide-left{animation:slideLeft .22s ease-out;}
+    @keyframes slideRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes slideLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+    /* === HISTORY STAGGER === */
+    .history-item{animation:itemIn .3s ease-out both;}
+    @keyframes itemIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    /* === CARD ENTRANCE === */
+    @keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .dashboard-grid > .card{animation:cardIn .38s ease-out both;}
+    .dashboard-grid > .card:nth-child(1){animation-delay:.06s;}
+    .dashboard-grid > .card:nth-child(2){animation-delay:.13s;}
+    .dashboard-grid > .card:nth-child(3){animation-delay:.20s;}
+    .dashboard-grid > .card:nth-child(4){animation-delay:.27s;}
+    /* === BUTTON MICRO-INTERACTIONS === */
+    .btn-primary{position:relative;overflow:hidden;}
+    .btn-primary::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.2);opacity:0;transition:opacity .15s;border-radius:inherit;}
+    .btn-primary:active::after{opacity:1;}
+    .category-btn{transition:transform var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast);}
+    .category-btn:active{transform:scale(.95);}
+    /* === SPINNER === */
+    .spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(56,189,248,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* === TOAST === */
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(22,35,60,.96);border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:10px 20px;font-size:.85rem;color:var(--text-main);pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;z-index:2000;white-space:nowrap;}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    /* === APP ROOT / TRANSITIONS === */
+    #appRoot{transition:opacity .35s ease;}
+    /* === SAVE RING === */
+    @keyframes successRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,.7)}70%{box-shadow:0 0 0 16px rgba(56,189,248,0)}100%{box-shadow:0 0 0 0 rgba(56,189,248,0)}}
+    .save-success{animation:successRing .65s ease-out;}
+    /* === REDUCED MOTION === */
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
+  </style>
+</head>
+<body>
+  <div id="toast"></div>
+
+  <!-- 認証ゲート -->
+  <div id="authGate">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <span class="logo-circle auth-logo-pulse"></span>
+        家計フロー・ナビ
+      </div>
+      <p class="auth-sub">ご家族2人専用の家計簿です。<br>Googleアカウントでログインしてください。</p>
+      <button id="googleSignInBtn" class="btn-primary auth-btn">
+        <span class="icon">🔐</span>&nbsp;Googleでログイン
+      </button>
+      <div id="authError" class="auth-error"></div>
+    </div>
+  </div>
+
+  <div class="app" id="appRoot" style="display:none;opacity:0">
+    <header class="app-header">
+      <div>
+        <div class="app-title-main">
+          <span class="logo-circle"></span>
+          家計フロー・ナビ
+        </div>
+        <div class="app-title-sub">
+          今日のお金の流れを、美しく・直感的に。
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="chip user-chip" id="userChip" style="display:none">
+          <span style="font-size:1rem">👤</span>
+          <span id="userName">-</span>
+        </div>
+        <div class="chip">
+          今月の支出：
+          <strong id="header-total">¥0</strong>
+        </div>
+        <button class="nav-button" id="goDashboardBtn">
+          <span class="icon">🏠</span>
+          ホームへ
+        </button>
+        <button class="nav-button" id="signOutBtn" style="display:none">
+          <span class="icon">🚪</span>ログアウト
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Screen 1: Dashboard -->
+      <section id="screen-dashboard" class="screen active">
+        <div class="uid-banner" id="uidBanner">
+          <button class="uid-banner-close" id="uidBannerClose" title="閉じる">✕</button>
+          <strong>🔐 初回セットアップ — Firestoreルール用UID</strong><br>
+          あなたのUID:<code id="currentUID">ログイン後に表示されます</code>
+          <button class="uid-copy-btn" id="uidCopyBtn">📋 コピー</button>
+          <span style="display:block;margin-top:6px;font-size:.73rem;opacity:.8">
+            2人分のUIDをfirestore.rulesに貼り付けて再デプロイすると2人限定が有効になります。
+          </span>
+        </div>
+        <div class="dashboard-grid">
+          <!-- Left: Summary + Chart + AI Insight -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">
+                  <span class="card-title-accent"></span>
+                  今月のサマリー
+                </div>
+                <div class="card-subtitle" id="summary-month-label"></div>
+              </div>
+              <button class="btn-primary" id="newEntryBtn">
+                <span class="icon">＋</span>
+                新規記入
+              </button>
+            </div>
+
+            <div class="summary-main">
+              <div class="summary-main-amount" id="summary-total-amount">¥0</div>
+              <div class="summary-main-label">今月の合計支出</div>
+            </div>
+
+            <div class="summary-tags" id="summary-category-tags"></div>
+
+            <div class="mt-8">
+              <div class="card-header" style="margin-bottom: 6px;">
+                <div class="card-title" style="font-size: 0.9rem;">
+                  <span class="card-title-accent"></span>
+                  支出グラフ
+                </div>
+                <div class="card-subtitle">
+                  用途別・月別を切り替えて確認できます。
+                </div>
+              </div>
+
+              <div class="chart-controls">
+                <select id="chartDimension" class="input-select">
+                  <option value="category">用途別（今月）</option>
+                  <option value="month">月別（過去6ヶ月）</option>
+                </select>
+                <select id="chartType" class="input-select">
+                  <option value="pie">円グラフ</option>
+                  <option value="bar">棒グラフ</option>
+                  <option value="line">折れ線グラフ</option>
+                </select>
+              </div>
+
+              <div style="
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.6);
+                  padding: 10px;
+                  background: radial-gradient(
+                      circle at top,
+                      rgba(56, 189, 248, 0.16),
+                      transparent
+                    ),
+                    rgba(15, 23, 42, 0.95);
+                ">
+                <canvas id="spendingChart" height="210"></canvas>
+                <div id="chartPlaceholder" class="chart-placeholder" style="display: none;">
+                  まだデータがありません。<br />
+                  「新規記入」から最初の支出を登録してみましょう。
+                </div>
+              </div>
+            </div>
+
+            <!-- AI節約アドバイス＆将来予測 -->
+            <div class="insight-section">
+              <div class="insight-title">
+                <span>🧠 AI風・節約アドバイス</span>
+                <span class="insight-badge">β / ローカル解析</span>
+              </div>
+              <div id="aiAdviceText" class="insight-text">
+                データが集まると、ここに「使い方のクセ」や「節約ポイント」が表示されます。
+              </div>
+            </div>
+
+            <div class="insight-section">
+              <div class="insight-title">
+                <span>📈 簡易・将来予測</span>
+                <span class="insight-badge">トレンド推定</span>
+              </div>
+              <div id="forecastText" class="insight-text">
+                過去の月別データがたまると、「今月の予測支出」と「来月の予測額」を表示します。
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: History -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">
+                  <span class="card-title-accent"></span>
+                  履歴・編集
+                </div>
+                <div class="card-subtitle">
+                  確定後も、ここから編集・削除できます。
+                </div>
+              </div>
+              <span class="pill">
+                <span class="pill-dot"></span>
+                記録を続けるほど、可視化が賢くなります
+              </span>
+            </div>
+
+            <div class="history-filters">
+              <div class="input-field" style="flex: 1 1 120px;">
+                <label class="field-label">月で絞り込み</label>
+                <select id="historyMonthFilter" class="input-base" style="border-radius: 999px;">
+                  <option value="all">すべての月</option>
+                </select>
+              </div>
+              <div class="input-field" style="flex: 1 1 120px;">
+                <label class="field-label">用途で絞り込み</label>
+                <select id="historyCategoryFilter" class="input-base" style="border-radius: 999px;">
+                  <option value="all">すべての用途</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="history-list" id="historyList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Category Selection -->
+      <section id="screen-category" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title">用途を選択</div>
+              <div class="screen-subtitle">
+                どんな支出だったか、一番近いものを選んでください。
+              </div>
+            </div>
+            <button class="btn-outline" id="categoryBackBtn">
+              <span class="icon">←</span>
+              戻る
+            </button>
+          </div>
+
+          <div class="category-grid">
+            <button class="category-btn" data-category="食品・食事">
+              <div class="category-label">
+                <span class="category-icon">🍚</span> 食品・食事
+              </div>
+              <div class="category-meta">毎日のご飯・飲み物など</div>
+            </button>
+            <button class="category-btn" data-category="日用品">
+              <div class="category-label">
+                <span class="category-icon">🧴</span> 日用品
+              </div>
+              <div class="category-meta">洗剤・トイレットペーパーなど</div>
+            </button>
+            <button class="category-btn" data-category="書籍">
+              <div class="category-label">
+                <span class="category-icon">📚</span> 書籍
+              </div>
+              <div class="category-meta">本・学習教材など</div>
+            </button>
+            <button class="category-btn" data-category="病院・お薬">
+              <div class="category-label">
+                <span class="category-icon">💊</span> 病院・お薬
+              </div>
+              <div class="category-meta">診察代・薬代など</div>
+            </button>
+            <button class="category-btn" data-category="教会関連">
+              <div class="category-label">
+                <span class="category-icon">⛪</span> 教会関連
+              </div>
+              <div class="category-meta">献金・教会行事など</div>
+            </button>
+            <button class="category-btn" data-category="交通費チャージ">
+              <div class="category-label">
+                <span class="category-icon">🚃</span> 交通費チャージ
+              </div>
+              <div class="category-meta">Suica・PASMOチャージなど</div>
+            </button>
+            <button class="category-btn" data-category="ベイビーグッズ">
+              <div class="category-label">
+                <span class="category-icon">👶</span> ベイビーグッズ
+              </div>
+              <div class="category-meta">オムツ・ベビー服など</div>
+            </button>
+          </div>
+
+          <div class="category-other-box">
+            <div class="field-label">その他の用途（自由記入）</div>
+            <input
+              type="text"
+              id="otherCategoryInput"
+              class="input-text"
+              placeholder="例：プレゼント、家電、サブスク など"
+            />
+            <div class="form-actions" style="justify-content: flex-start; margin-top: 10px;">
+              <button class="btn-outline" id="otherCategoryDecideBtn">
+                <span class="icon">✏️</span>
+                この用途で入力画面へ進む
+              </button>
+            </div>
+            <div class="muted mt-4">
+              ※ 用途名は、履歴やグラフでもそのまま表示されます。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Entry Form -->
+      <section id="screen-entry" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title" id="entryScreenTitle">新規記入</div>
+              <div class="screen-subtitle">
+                金額と場所を入力し、「保存して戻る」を押してください。
+              </div>
+            </div>
+            <button class="btn-outline" id="entryBackBtn">
+              <span class="icon">←</span>
+              戻る
+            </button>
+          </div>
+
+          <div class="mt-4">
+            <div class="field-label">選択中の用途</div>
+            <div class="entry-category-display" id="entryCategoryDisplay">
+              <span class="dot"></span>
+              <span id="entryCategoryText">未選択</span>
+            </div>
+            <span class="badge-soft" style="margin-left: 6px;">
+              用途を変えたい場合は戻って再選択してください
+            </span>
+          </div>
+
+          <div class="form-grid form-grid-2col mt-6">
+            <div class="input-field">
+              <label class="field-label">日付</label>
+              <input type="date" id="entryDate" class="input-base" />
+            </div>
+            <div class="input-field">
+              <label class="field-label">金額（¥）</label>
+              <input
+                type="number"
+                id="entryAmount"
+                class="input-base"
+                placeholder="例：1500"
+                inputmode="decimal"
+                min="0"
+              />
+            </div>
+          </div>
+
+          <div class="form-grid mt-6">
+            <div class="input-field">
+              <label class="field-label">購入場所</label>
+              <input
+                type="text"
+                id="entryPlace"
+                class="input-base"
+                placeholder="例：ヤオコー中野島店、Amazon、〇〇病院 など"
+              />
+            </div>
+            <div class="input-field">
+              <label class="field-label">メモ（任意）</label>
+              <textarea
+                id="entryMemo"
+                class="input-base"
+                rows="2"
+                placeholder="何を買ったか、簡単にメモしておくと後から分かりやすくなります。"
+                style="resize: vertical;"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions mt-6">
+            <button class="btn-outline" id="entryCancelBtn">
+              キャンセル
+            </button>
+            <button class="btn-primary" id="entrySaveBtn">
+              <span class="icon">💾</span>
+              保存して戻る
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Firebase + アプリ本体 -->
+  <script type="module">
+    // ===== Firebase SDK (CDN) =====
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      updateDoc,
+      deleteDoc,
+      doc,
+      onSnapshot,
+      query,
+      orderBy,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    // ★ あなたの Firebase 設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyBMnkxD5SooD7ZhJJEnCbBeIJgLqL0YrEk",
+      authDomain: "kakeibo-family-f8129.firebaseapp.com",
+      projectId: "kakeibo-family-f8129",
+      storageBucket: "kakeibo-family-f8129.firebasestorage.app",
+      messagingSenderId: "1079013414534",
+      appId: "1:1079013414534:web:b5f4cc1aa4005427312307",
+      measurementId: "G-9HC7KLZ8BQ",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // ★ 家族ごとのID：ここを家族で同じ文字列にすれば共有されます
+    const HOUSEHOLD_ID = "oshiro_family";
+
+    // Firestore コレクション参照
+    const entriesCollectionRef = collection(db, "households", HOUSEHOLD_ID, "entries");
+
+    // ====== ローカル状態 ======
+    let entries = [];
+    let editingId = null;
+    let selectedCategory = null;
+    let selectedCategoryLabel = null;
+    let currentScreen = "dashboard";
+    let spendingChart = null;
+    let unsubscribeEntries = null;
+
+    // ====== ユーティリティ ======
+    function todayISO() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function getMonthKey(isoDate) {
+      if (!isoDate) return "";
+      return isoDate.slice(0, 7);
+    }
+
+    function formatMonthLabel(isoMonth) {
+      if (!isoMonth || isoMonth.length !== 7) return isoMonth;
+      const [y, m] = isoMonth.split("-");
+      return `${y}年${Number(m)}月`;
+    }
+
+    function formatCurrencyYen(amount) {
+      if (!isFinite(amount)) return "¥0";
+      return "¥" + Math.round(amount).toLocaleString("ja-JP");
+    }
+    function countUp(el, target, duration = 750) {
+      if (!el) return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        el.textContent = "¥" + Math.round(target).toLocaleString("ja-JP"); return;
+      }
+      const t0 = performance.now();
+      (function tick(now) {
+        const p = Math.min((now - t0) / duration, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        el.textContent = "¥" + Math.round(e * target).toLocaleString("ja-JP");
+        if (p < 1) requestAnimationFrame(tick);
+      })(performance.now());
+    }
+    function showToast(msg, duration = 2200) {
+      const t = document.getElementById("toast");
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.add("show");
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.classList.remove("show"), duration);
+    }
+
+    // ====== 画面切り替え ======
+    function switchScreen(name) {
+      currentScreen = name;
+      document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+      const target = document.getElementById(`screen-${name}`);
+      if (target) target.classList.add("active");
+    }
+
+    // ====== 集計 ======
+    function getMonthTotals() {
+      const totals = {};
+      for (const e of entries) {
+        const m = getMonthKey(e.date);
+        if (!m) continue;
+        totals[m] = (totals[m] || 0) + (e.amount || 0);
+      }
+      return totals;
+    }
+
+    function getMonthCategoryTotals(monthKey) {
+      const result = {};
+      for (const e of entries) {
+        if (getMonthKey(e.date) !== monthKey) continue;
+        const cat = e.category || "未分類";
+        result[cat] = (result[cat] || 0) + (e.amount || 0);
+      }
+      return result;
+    }
+
+    // ====== Firestore 操作 ======
+    async function addEntryToFirestore(entry) {
+      await addDoc(entriesCollectionRef, {
+        category: entry.category,
+        date: entry.date,
+        amount: entry.amount,
+        place: entry.place,
+        memo: entry.memo,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    async function updateEntryInFirestore(id, partial) {
+      const ref = doc(entriesCollectionRef, id);
+      await updateDoc(ref, partial);
+    }
+
+    async function deleteEntryFromFirestore(id) {
+      const ref = doc(entriesCollectionRef, id);
+      await deleteDoc(ref);
+    }
+
+    function subscribeEntries() {
+      const q = query(entriesCollectionRef,orderBy("date", "desc"));
+      unsubscribeEntries = onSnapshot(q, (snapshot) => {
+        const list = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          list.push({
+            id: docSnap.id,
+            category: data.category || "未分類",
+            date: data.date || "",
+            amount: data.amount || 0,
+            place: data.place || "",
+            memo: data.memo || "",
+            createdAt: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0,
+          });
+        });
+        entries = list;
+        renderAll();
+      });
+    }
+
+    // ====== UI 更新 ======
+    function renderSummary() {
+      const headerTotalEl = document.getElementById("header-total");
+      const summaryTotalEl = document.getElementById("summary-total-amount");
+      const summaryMonthLabelEl = document.getElementById("summary-month-label");
+      const summaryCategoryTagsEl = document.getElementById("summary-category-tags");
+
+      const todayMonth = getMonthKey(todayISO());
+      const monthEntries = entries.filter((e) => getMonthKey(e.date) === todayMonth);
+      const total = monthEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      countUp(headerTotalEl, total);
+      countUp(summaryTotalEl, total);
+      summaryMonthLabelEl.textContent = `${formatMonthLabel(todayMonth)}の支出サマリー`;
+
+      const categoryTotals = getMonthCategoryTotals(todayMonth);
+      const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+      summaryCategoryTagsEl.innerHTML = "";
+      if (sorted.length === 0) {
+        const span = document.createElement("span");
+        span.className = "summary-tag";
+        span.textContent = "まだデータがありません";
+        summaryCategoryTagsEl.appendChild(span);
+      } else {
+        sorted.slice(0, 3).forEach(([cat, val]) => {
+          const span = document.createElement("span");
+          span.className = "summary-tag";
+          span.textContent = `${cat}：${formatCurrencyYen(val)}`;
+          summaryCategoryTagsEl.appendChild(span);
+        });
+      }
+    }
+
+    function buildMonthOptions() {
+      const monthSet = new Set(entries.map((e) => getMonthKey(e.date)));
+      monthSet.delete("");
+      const sortedMonths = Array.from(monthSet).sort().reverse();
+
+      const historyMonthFilter = document.getElementById("historyMonthFilter");
+      historyMonthFilter.innerHTML = "";
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "すべての月";
+      historyMonthFilter.appendChild(optAll);
+
+      for (const m of sortedMonths) {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = formatMonthLabel(m);
+        historyMonthFilter.appendChild(opt);
+      }
+    }
+
+    function buildCategoryOptions() {
+      const categorySet = new Set(entries.map((e) => e.category || "未分類"));
+      const sorted = Array.from(categorySet).sort();
+      const historyCategoryFilter = document.getElementById("historyCategoryFilter");
+      historyCategoryFilter.innerHTML = "";
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "すべての用途";
+      historyCategoryFilter.appendChild(optAll);
+
+      for (const c of sorted) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        historyCategoryFilter.appendChild(opt);
+      }
+    }
+
+    function renderHistoryList() {
+      const container = document.getElementById("historyList");
+      container.innerHTML = "";
+
+      if (entries.length === 0) {
+        const div = document.createElement("div");
+        div.className = "chart-placeholder";
+        div.style.marginTop = "4px";
+        div.innerHTML = "まだ履歴がありません。<br>今日の支出から記録してみましょう。";
+        container.appendChild(div);
+        return;
+      }
+
+      const monthFilter = document.getElementById("historyMonthFilter").value;
+      const categoryFilter = document.getElementById("historyCategoryFilter").value;
+
+      let filtered = entries.slice();
+      if (monthFilter !== "all") {
+        filtered = filtered.filter((e) => getMonthKey(e.date) === monthFilter);
+      }
+      if (categoryFilter !== "all") {
+        filtered = filtered.filter((e) => e.category === categoryFilter);
+      }
+
+      filtered.sort((a, b) => {
+        const dA = a.date || "";
+        const dB = b.date || "";
+        if (dA === dB) {
+          return (b.createdAt || 0) - (a.createdAt || 0);
+        }
+        return dA > dB ? -1 : 1;
+      });
+
+      if (filtered.length === 0) {
+        const div = document.createElement("div");
+        div.className = "chart-placeholder";
+        div.style.marginTop = "4px";
+        div.textContent =
+          "選択された条件に一致する履歴がありません。フィルターを変更してみてください。";
+        container.appendChild(div);
+        return;
+      }
+
+      let _hi = 0;
+      for (const e of filtered) {
+        const item = document.createElement("div");
+        item.className = "history-item";
+        item.dataset.id = e.id;
+        item.style.animationDelay = (_hi * 0.045) + "s";
+        _hi++;
+
+        const catChip = document.createElement("div");
+        catChip.className = "history-category-chip";
+        catChip.textContent = e.category || "未分類";
+
+        const main = document.createElement("div");
+        main.className = "history-main";
+
+        const left = document.createElement("div");
+        left.textContent = e.place || "場所未入力";
+
+        const right = document.createElement("div");
+        right.className = "history-amount";
+        right.textContent = formatCurrencyYen(e.amount || 0);
+
+        main.appendChild(left);
+        main.appendChild(right);
+
+        const meta = document.createElement("div");
+        meta.className = "history-meta";
+
+        const dateSpan = document.createElement("span");
+        dateSpan.innerHTML = '<span class="dot"></span>' + (e.date || "-");
+
+        const monthSpan = document.createElement("span");
+        monthSpan.innerHTML =
+          '<span class="dot"></span>' + formatMonthLabel(getMonthKey(e.date));
+
+        meta.appendChild(dateSpan);
+        meta.appendChild(monthSpan);
+
+        if (e.memo) {
+          const memoDiv = document.createElement("div");
+          memoDiv.className = "history-memo";
+          memoDiv.textContent = e.memo;
+          item.appendChild(memoDiv);
+        }
+
+        item.appendChild(catChip);
+        item.appendChild(main);
+        item.appendChild(meta);
+
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn-ghost btn-edit";
+        editBtn.innerHTML = "✏️ 編集";
+        editBtn.dataset.id = e.id;
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn-danger btn-delete";
+        delBtn.innerHTML = "🗑 削除";
+        delBtn.dataset.id = e.id;
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        item.appendChild(actions);
+
+        container.appendChild(item);
+      }
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById("spendingChart").getContext("2d");
+      const placeholder = document.getElementById("chartPlaceholder");
+
+      if (spendingChart) {
+        spendingChart.destroy();
+        spendingChart = null;
+      }
+
+      if (entries.length === 0) {
+        ctx.canvas.style.display = "none";
+        placeholder.style.display = "block";
+        return;
+      }
+
+      const dimension = document.getElementById("chartDimension").value;
+      const chartType = document.getElementById("chartType").value;
+
+      let labels = [];
+      let data = [];
+      let titleText = "";
+
+      if (dimension === "category") {
+        const todayMonth = getMonthKey(todayISO());
+        const monthEntries = entries.filter((e) => getMonthKey(e.date) === todayMonth);
+        const categoryTotals = {};
+        for (const e of monthEntries) {
+          const key = e.category || "未分類";
+          categoryTotals[key] = (categoryTotals[key] || 0) + (e.amount || 0);
+        }
+        labels = Object.keys(categoryTotals);
+        data = labels.map((l) => categoryTotals[l]);
+        titleText = `${formatMonthLabel(todayMonth)} 用途別支出`;
+      } else {
+        const totalByMonth = getMonthTotals();
+        let months = Object.keys(totalByMonth).sort();
+        if (months.length > 6) {
+          months = months.slice(months.length - 6);
+        }
+        labels = months.map((m) => formatMonthLabel(m));
+        data = months.map((m) => totalByMonth[m]);
+        titleText = "月別支出推移";
+      }
+
+      if (labels.length === 0) {
+        ctx.canvas.style.display = "none";
+        placeholder.style.display = "block";
+        return;
+      } else {
+        ctx.canvas.style.display = "block";
+        placeholder.style.display = "none";
+      }
+
+      const configType =
+        chartType === "pie" ? "pie" : chartType === "line" ? "line" : "bar";
+
+      spendingChart = new Chart(ctx, {
+        type: configType,
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "支出額（円）",
+              data,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              labels: {
+                color: "#e5e7eb",
+                font: { size: 11 },
+              },
+            },
+            title: {
+              display: true,
+              text: titleText,
+              color: "#e5e7eb",
+              font: { size: 13, weight: "600" },
+            },
+          },
+          scales:
+            configType === "pie"
+              ? {}
+              : {
+                  x: {
+                    ticks: {
+                      color: "#9ca3af",
+                      font: { size: 10 },
+                    },
+                    grid: {
+                      color: "rgba(148,163,184,0.2)",
+                    },
+                  },
+                  y: {
+                    ticks: {
+                      color: "#9ca3af",
+                      font: { size: 10 },
+                    },
+                    grid: {
+                      color: "rgba(148,163,184,0.2)",
+                    },
+                  },
+                },
+        },
+      });
+    }
+
+    // ===== AI風アドバイス =====
+    function generateAiAdvice() {
+      const aiEl = document.getElementById("aiAdviceText");
+      if (entries.length === 0) {
+        aiEl.textContent =
+          "まだ支出データがないため、アドバイスを生成できません。まずは数日分の記録をためてみましょう。";
+        return;
+      }
+
+      const monthTotals = getMonthTotals();
+      const months = Object.keys(monthTotals).sort();
+      const todayMonth = getMonthKey(todayISO());
+      const thisTotal = monthTotals[todayMonth] || 0;
+      const thisCats = getMonthCategoryTotals(todayMonth);
+
+      const currentIdx = months.indexOf(todayMonth);
+      let lastMonthKey = null;
+      let lastTotal = 0;
+      let lastCats = {};
+      if (currentIdx > 0) {
+        lastMonthKey = months[currentIdx - 1];
+        lastTotal = monthTotals[lastMonthKey] || 0;
+        lastCats = getMonthCategoryTotals(lastMonthKey);
+      }
+
+      const sortedCats = Object.entries(thisCats).sort((a, b) => b[1] - a[1]);
+      const topCat = sortedCats[0] || null;
+      const totalThis = thisTotal || 1;
+      const topShare = topCat ? topCat[1] / totalThis : 0;
+
+      const lines = [];
+
+      lines.push(
+        `今月ここまでの支出は <span class="insight-highlight">${formatCurrencyYen(
+          thisTotal
+        )}</span> です。`
+      );
+
+      if (lastMonthKey) {
+        if (lastTotal === 0 && thisTotal > 0) {
+          lines.push(
+            `${formatMonthLabel(
+              lastMonthKey
+            )}はほとんど支出がなく、今月から動き始めたようです。リズムを作りつつ、使いすぎに注意していきましょう。`
+          );
+        } else {
+          const diff = thisTotal - lastTotal;
+          const ratio = thisTotal / (lastTotal || 1);
+          if (ratio > 1.2) {
+            lines.push(
+              `${formatMonthLabel(
+                todayMonth
+              )}のペースは先月比で <span class="insight-highlight">${Math.round(
+                ratio * 100
+              )}%</span> 程度です。少し加速気味なので、「本当に必要？」と一呼吸置いてから支出すると安心です。`
+            );
+          } else if (ratio < 0.8) {
+            lines.push(
+              `${formatMonthLabel(
+                todayMonth
+              )}のペースは先月よりも落ち着いています。いいリズムです。この調子で「優先度の高い支出」に集中していきましょう。`
+            );
+          } else {
+            lines.push(
+              `${formatMonthLabel(
+                todayMonth
+              )}と先月の支出ペースは大きな差はありません。今の生活スタイルが「標準のベース」になりつつあります。`
+            );
+          }
+        }
+      } else {
+        lines.push(
+          `まだ比較できる過去データが少ないため、「今のペース」が基準になっていきます。2〜3ヶ月分たまると、より精度の高いアドバイスができます。`
+        );
+      }
+
+      if (topCat) {
+        const [catName, catTotal] = topCat;
+        const sharePercent = Math.round(topShare * 100);
+
+        lines.push(
+          `今月もっとも大きい項目は <span class="insight-highlight">${catName}</span> で、全体の約 <span class="insight-highlight">${sharePercent}%</span> を占めています。`
+        );
+
+        let lastShare = null;
+        if (lastMonthKey) {
+          const lastTotalThisCat = lastCats[catName] || 0;
+          const lastTotalMonth = lastTotal || 1;
+          lastShare = lastTotalThisCat / lastTotalMonth;
+        }
+
+        if (catName.includes("食品")) {
+          if (sharePercent >= 45) {
+            lines.push(
+              `食品費の比率がやや高めです。<br>・コンビニ → スーパー中心に切り替える<br>・まとめ買いの日を決める<br>などを意識すると、月に数千円レベルで差が出やすいゾーンです。`
+            );
+          } else {
+            lines.push(
+              `食品費はバランスの良い範囲におさまっています。今のルール（買い物の曜日・上限額）を言語化しておくと、今後もコントロールしやすくなります。`
+            );
+          }
+        } else if (catName.includes("ベイビー")) {
+          lines.push(
+            `ベイビーグッズへの支出が大きめです。必要な支出ではありますが、<br>・「今すぐ必要なもの」と「先で良いもの」を分ける<br>・まとめ買いで単価を下げる<br>など、未来の出費も見据えて計画的に整えていけると安心です。`
+          );
+        } else if (catName.includes("教会")) {
+          lines.push(
+            `教会関連の支出が家計の中で大きな位置を占めています。信仰としての優先度と、生活費としてのバランスを月ごとに振り返ると、「心も家計も整ったライン」が見えてきます。`
+          );
+        } else if (sharePercent >= 40) {
+          lines.push(
+            `このカテゴリが全体の中でかなり大きな割合を占めています。「毎月これくらいならOK」という上限ラインを一度決めておくと、迷いなくお金を使えるようになります。`
+          );
+        }
+
+        if (lastShare != null) {
+          const diffShare = topShare - lastShare;
+          if (Math.abs(diffShare) >= 0.1) {
+            const direction = diffShare > 0 ? "増え" : "減り";
+            lines.push(
+              `先月と比べて、${catName}の比率は約 <span class="insight-highlight">${Math.round(
+                Math.abs(diffShare) * 100
+              )}%</span> ${direction} ました。理由を一言メモに残しておくと、後から家計のストーリーが見えてきます。`
+            );
+          }
+        }
+      }
+
+      aiEl.innerHTML = lines.join("<br><br>");
+    }
+
+    // ===== 簡易・将来予測 =====
+    function daysInMonth(year, monthIndex) {
+      return new Date(year, monthIndex + 1, 0).getDate();
+    }
+
+    function generateForecast() {
+      const forecastEl = document.getElementById("forecastText");
+      if (entries.length === 0) {
+        forecastEl.textContent =
+          "まだ月別のデータがないため、予測ができません。まずは1ヶ月分のデータをためてみましょう。";
+        return;
+      }
+
+      const monthTotals = getMonthTotals();
+      let months = Object.keys(monthTotals).sort();
+      if (months.length === 0) {
+        forecastEl.textContent =
+          "まだ月別のデータがないため、予測ができません。";
+        return;
+      }
+
+      const today = new Date();
+      const todayMonthKey = getMonthKey(todayISO());
+      const todayDay = today.getDate();
+      const thisMonthTotal = monthTotals[todayMonthKey] || 0;
+
+      const year = today.getFullYear();
+      const monthIndex = today.getMonth();
+      const dim = daysInMonth(year, monthIndex);
+      const avgPerDay = thisMonthTotal / Math.max(todayDay, 1);
+      const projectedThisMonth = avgPerDay * dim;
+
+      const xs = [];
+      const ys = [];
+      months.forEach((m, i) => {
+        xs.push(i);
+        ys.push(monthTotals[m]);
+      });
+
+      let forecastNext = null;
+      if (months.length >= 2) {
+        const n = xs.length;
+        const sumX = xs.reduce((s, v) => s + v, 0);
+        const sumY = ys.reduce((s, v) => s + v, 0);
+        const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+        const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+
+        const denom = n * sumX2 - sumX * sumX;
+        let a, b;
+        if (denom === 0) {
+          a = sumY / n;
+          b = 0;
+        } else {
+          b = (n * sumXY - sumX * sumY) / denom;
+          a = (sumY - b * sumX) / n;
+        }
+
+        const nextT = xs[xs.length - 1] + 1;
+        forecastNext = a + b * nextT;
+      }
+
+      const lines = [];
+
+      lines.push(
+        `今日までの今月の支出は <span class="insight-highlight">${formatCurrencyYen(
+          thisMonthTotal
+        )}</span> です。`
+      );
+      lines.push(
+        `1日あたりの平均支出は約 <span class="insight-highlight">${formatCurrencyYen(
+          avgPerDay
+        )}</span> で、このペースが続くと今月は <span class="insight-highlight">${formatCurrencyYen(
+          projectedThisMonth
+        )}</span> 前後になりそうです。`
+      );
+
+      if (forecastNext != null) {
+        lines.push(
+          `過去の月別合計のトレンドから、来月の予測支出はおおよそ <span class="insight-highlight">${formatCurrencyYen(
+            forecastNext
+          )}</span> と推定されます（単純な直線モデルによる推定）。`
+        );
+        lines.push(
+          `「今月の予測額」と「来月の予測額」のどちらも、<br>・目標にしたい上限額<br>・最低限確保したい貯金額<br>を一度決めておくと、家計の意思決定がぐっと楽になります。`
+        );
+      } else {
+        lines.push(
+          `まだ月別データが1ヶ月分のみのため、来月の予測は行っていません。2ヶ月以上のデータが集まると、来月以降の予測も表示されます。`
+        );
+      }
+
+      forecastEl.innerHTML = lines.join("<br><br>");
+    }
+
+    // ===== 入力フォーム描画 =====
+    function renderEntryFormForNew() {
+      const entryScreenTitle = document.getElementById("entryScreenTitle");
+      const entryCategoryText = document.getElementById("entryCategoryText");
+      const entryDate = document.getElementById("entryDate");
+      const entryAmount = document.getElementById("entryAmount");
+      const entryPlace = document.getElementById("entryPlace");
+      const entryMemo = document.getElementById("entryMemo");
+
+      entryScreenTitle.textContent = "新規記入";
+      entryCategoryText.textContent = selectedCategoryLabel || "未選択";
+      entryDate.value = todayISO();
+      entryAmount.value = "";
+      entryPlace.value = "";
+      entryMemo.value = "";
+
+      editingId = null;
+    }
+
+    function renderEntryFormForEdit(entry) {
+      const entryScreenTitle = document.getElementById("entryScreenTitle");
+      const entryCategoryText = document.getElementById("entryCategoryText");
+      const entryDate = document.getElementById("entryDate");
+      const entryAmount = document.getElementById("entryAmount");
+      const entryPlace = document.getElementById("entryPlace");
+      const entryMemo = document.getElementById("entryMemo");
+
+      entryScreenTitle.textContent = "編集";
+      selectedCategory = entry.category;
+      selectedCategoryLabel = entry.category;
+      entryCategoryText.textContent = selectedCategoryLabel || "未選択";
+      entryDate.value = entry.date || todayISO();
+      entryAmount.value = entry.amount != null ? entry.amount : "";
+      entryPlace.value = entry.place || "";
+      entryMemo.value = entry.memo || "";
+
+      editingId = entry.id;
+    }
+
+    function renderAll() {
+      renderSummary();
+      buildMonthOptions();
+      buildCategoryOptions();
+      renderHistoryList();
+      renderChart();
+      generateAiAdvice();
+      generateForecast();
+    }
+
+    // ===== 保存・削除ハンドラ =====
+    function onCategorySelected(categoryLabel) {
+      selectedCategory = categoryLabel;
+      selectedCategoryLabel = categoryLabel;
+      renderEntryFormForNew();
+      switchScreen("entry");
+    }
+
+    async function handleSaveEntry() {
+      if (!selectedCategoryLabel) {
+        alert("用途が選択されていません。戻って用途を選んでください。");
+        return;
+      }
+
+      const entryDate = document.getElementById("entryDate").value || todayISO();
+      const amountRaw = document.getElementById("entryAmount").value.trim();
+      const place = document.getElementById("entryPlace").value.trim();
+      const memo = document.getElementById("entryMemo").value.trim();
+
+      const amount = Number(amountRaw);
+      if (!amountRaw || !isFinite(amount) || amount < 0) {
+        alert("金額を正しく入力してください。");
+        return;
+      }
+
+      if (!place) {
+        if (!confirm("購入場所が未入力です。本当にこのまま保存しますか？")) {
+          return;
+        }
+      }
+
+      try {
+        if (editingId) {
+          await updateEntryInFirestore(editingId, {
+            date: entryDate,
+            amount,
+            place,
+            memo,
+          });
+        } else {
+          await addEntryToFirestore({
+            category: selectedCategoryLabel,
+            date: entryDate,
+            amount,
+            place,
+            memo,
+          });
+        }
+      } catch (e) {
+        console.error(e);
+        alert("保存中にエラーが発生しました。通信状況を確認してください。");
+        return;
+      }
+
+      editingId = null;
+      selectedCategory = null;
+      selectedCategoryLabel = null;
+      switchScreen("dashboard");
+    }
+
+    async function handleDeleteEntry(id) {
+      const target = entries.find((e) => e.id === id);
+      if (!target) return;
+      if (
+        !confirm(
+          `この記録を削除しますか？\n\n${target.category} / ${formatCurrencyYen(
+            target.amount
+          )} / ${target.date}`
+        )
+      ) {
+        return;
+      }
+      try {
+        await deleteEntryFromFirestore(id);
+      } catch (e) {
+        console.error(e);
+        alert("削除中にエラーが発生しました。通信状況を確認してください。");
+      }
+    }
+
+    // ===== 初期化 =====
+    function init() {
+      // === 認証ハンドラ ===
+      document.getElementById("googleSignInBtn").addEventListener("click", async () => {
+        const btn = document.getElementById("googleSignInBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>&nbsp;サインイン中…';
+        try {
+          await signInWithPopup(auth, googleProvider);
+        } catch (e) {
+          document.getElementById("authError").textContent =
+            "ログインに失敗しました。ポップアップが閉じられたか接続を確認してください。";
+          btn.disabled = false;
+          btn.innerHTML = '<span class="icon">🔐</span>&nbsp;Googleでログイン';
+        }
+      });
+      document.getElementById("signOutBtn").addEventListener("click", () => {
+        if (confirm("ログアウトしますか？")) signOut(auth);
+      });
+      // UID バナー操作
+      const _uidClose = document.getElementById("uidBannerClose");
+      if (_uidClose) {
+        if (sessionStorage.getItem("uidDismissed")) {
+          const b = document.getElementById("uidBanner");
+          if (b) b.style.display = "none";
+        }
+        _uidClose.addEventListener("click", () => {
+          const b = document.getElementById("uidBanner");
+          if (b) { b.style.display = "none"; sessionStorage.setItem("uidDismissed","1"); }
+        });
+      }
+      const _uidCopy = document.getElementById("uidCopyBtn");
+      if (_uidCopy) {
+        _uidCopy.addEventListener("click", () => {
+          const uid = document.getElementById("currentUID").textContent;
+          navigator.clipboard.writeText(uid)
+            .then(() => { _uidCopy.textContent = "✅ コピーしました"; setTimeout(() => (_uidCopy.textContent = "📋 コピー"), 2000); })
+            .catch(() => alert("UID: " + uid));
+        });
+      }
+      // === Auth State ===
+      onAuthStateChanged(auth, (user) => {
+        const gate    = document.getElementById("authGate");
+        const appRoot = document.getElementById("appRoot");
+        const chip    = document.getElementById("userChip");
+        const soBtn   = document.getElementById("signOutBtn");
+        if (user) {
+          gate.style.opacity = "0";
+          setTimeout(() => { gate.style.display = "none"; }, 320);
+          appRoot.style.display = "flex";
+          requestAnimationFrame(() => requestAnimationFrame(() => { appRoot.style.opacity = "1"; }));
+          chip.style.display = "flex";
+          soBtn.style.display = "flex";
+          document.getElementById("userName").textContent =
+            (user.displayName || user.email || "").split(" ")[0];
+          const uidEl = document.getElementById("currentUID");
+          if (uidEl) uidEl.textContent = user.uid;
+          if (!unsubscribeEntries) subscribeEntries();
+        } else {
+          if (unsubscribeEntries) { unsubscribeEntries(); unsubscribeEntries = null; }
+          entries = [];
+          gate.style.display = "flex";
+          setTimeout(() => { gate.style.opacity = "1"; }, 10);
+          appRoot.style.display = "none";
+          appRoot.style.opacity = "0";
+          chip.style.display = "none";
+          soBtn.style.display = "none";
+        }
+      });
+
+      document.getElementById("goDashboardBtn").addEventListener("click", () => {
+        switchScreen("dashboard");
+      });
+
+      document.getElementById("newEntryBtn").addEventListener("click", () => {
+        editingId = null;
+        selectedCategory = null;
+        selectedCategoryLabel = null;
+        switchScreen("category");
+      });
+
+      document
+        .getElementById("historyMonthFilter")
+        .addEventListener("change", renderHistoryList);
+      document
+        .getElementById("historyCategoryFilter")
+        .addEventListener("change", renderHistoryList);
+
+      document
+        .getElementById("chartDimension")
+        .addEventListener("change", () => {
+          renderChart();
+          generateForecast();
+        });
+      document
+        .getElementById("chartType")
+        .addEventListener("change", renderChart);
+
+      document.getElementById("historyList").addEventListener("click", (event) => {
+        const target = event.target;
+        if (target.classList.contains("btn-edit")) {
+          const id = target.dataset.id;
+          const entry = entries.find((e) => e.id === id);
+          if (!entry) return;
+          renderEntryFormForEdit(entry);
+          switchScreen("entry");
+        } else if (target.classList.contains("btn-delete")) {
+          const id = target.dataset.id;
+          handleDeleteEntry(id);
+        }
+      });
+
+      document.getElementById("categoryBackBtn").addEventListener("click", () => {
+        switchScreen("dashboard");
+      });
+
+      document.querySelectorAll(".category-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const category = btn.dataset.category;
+          onCategorySelected(category);
+        });
+      });
+
+      document
+        .getElementById("otherCategoryDecideBtn")
+        .addEventListener("click", () => {
+          const val = document.getElementById("otherCategoryInput").value.trim();
+          if (!val) {
+            alert("その他の用途名を入力してください。");
+            return;
+          }
+          onCategorySelected(val);
+        });
+
+      document.getElementById("entryBackBtn").addEventListener("click", () => {
+        switchScreen("category");
+      });
+
+      document.getElementById("entryCancelBtn").addEventListener("click", () => {
+        editingId = null;
+        selectedCategory = null;
+        selectedCategoryLabel = null;
+        switchScreen("dashboard");
+      });
+
+      document.getElementById("entrySaveBtn").addEventListener("click", () => {
+        handleSaveEntry();
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () =>
+        navigator.serviceWorker.register("/service-worker.js")
+          .catch(e => console.warn("SW:", e))
+      );
+    }
+  </script>
+</body>
+</html>
