@@ -12,7 +12,9 @@
   <meta name="apple-mobile-web-app-title" content="家計フロー・ナビ" />
 
   <!-- Chart.js（グラフ用） -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqtE"
+    crossorigin="anonymous"></script>
 
   <style>
     :root {
@@ -1175,6 +1177,14 @@
     // ★ 家族ごとのID：ここを家族で同じ文字列にすれば共有されます
     const HOUSEHOLD_ID = "oshiro_family";
 
+    const CONFIG = {
+      COUNT_UP_MS: 750,
+      TOAST_MS: 2200,
+      COPY_RESET_MS: 2000,
+      CHART_MAX_MONTHS: 6,
+      STAGGER_DELAY_S: 0.045,
+    };
+
     // Firestore コレクション参照
     const entriesCollectionRef = collection(db, "households", HOUSEHOLD_ID, "entries");
 
@@ -1211,7 +1221,7 @@
       if (!isFinite(amount)) return "¥0";
       return "¥" + Math.round(amount).toLocaleString("ja-JP");
     }
-    function countUp(el, target, duration = 750) {
+    function countUp(el, target, duration = CONFIG.COUNT_UP_MS) {
       if (!el) return;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         el.textContent = "¥" + Math.round(target).toLocaleString("ja-JP"); return;
@@ -1224,7 +1234,12 @@
         if (p < 1) requestAnimationFrame(tick);
       })(performance.now());
     }
-    function showToast(msg, duration = 2200) {
+    function escapeHTML(str) {
+      const d = document.createElement("div");
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+    function showToast(msg, duration = CONFIG.TOAST_MS) {
       const t = document.getElementById("toast");
       if (!t) return;
       t.textContent = msg;
@@ -1234,11 +1249,21 @@
     }
 
     // ====== 画面切り替え ======
+    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2 };
+
     function switchScreen(name) {
+      const prevOrder = SCREEN_ORDER[currentScreen] ?? 0;
+      const nextOrder = SCREEN_ORDER[name] ?? 0;
+      const animClass = nextOrder >= prevOrder ? "slide-right" : "slide-left";
       currentScreen = name;
-      document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+      document.querySelectorAll(".screen").forEach((s) => {
+        s.classList.remove("active", "slide-right", "slide-left");
+      });
       const target = document.getElementById(`screen-${name}`);
-      if (target) target.classList.add("active");
+      if (target) {
+        target.classList.add("active", animClass);
+        target.addEventListener("animationend", () => target.classList.remove(animClass), { once: true });
+      }
     }
 
     // ====== 集計 ======
@@ -1302,6 +1327,13 @@
         });
         entries = list;
         renderAll();
+      }, (error) => {
+        console.error("Firestore エラー:", error);
+        if (error.code === "permission-denied") {
+          showToast("このアカウントにはアクセス権がありません。正しいアカウントでログインしてください。", 5000);
+        } else {
+          showToast("データ取得に失敗しました。通信状況を確認してください。");
+        }
       });
     }
 
@@ -1424,7 +1456,7 @@
         const item = document.createElement("div");
         item.className = "history-item";
         item.dataset.id = e.id;
-        item.style.animationDelay = (_hi * 0.045) + "s";
+        item.style.animationDelay = (_hi * CONFIG.STAGGER_DELAY_S) + "s";
         _hi++;
 
         const catChip = document.createElement("div");
@@ -1525,8 +1557,8 @@
       } else {
         const totalByMonth = getMonthTotals();
         let months = Object.keys(totalByMonth).sort();
-        if (months.length > 6) {
-          months = months.slice(months.length - 6);
+        if (months.length > CONFIG.CHART_MAX_MONTHS) {
+          months = months.slice(months.length - CONFIG.CHART_MAX_MONTHS);
         }
         labels = months.map((m) => formatMonthLabel(m));
         data = months.map((m) => totalByMonth[m]);
@@ -1677,10 +1709,11 @@
 
       if (topCat) {
         const [catName, catTotal] = topCat;
+        const safeCatName = escapeHTML(catName);
         const sharePercent = Math.round(topShare * 100);
 
         lines.push(
-          `今月もっとも大きい項目は <span class="insight-highlight">${catName}</span> で、全体の約 <span class="insight-highlight">${sharePercent}%</span> を占めています。`
+          `今月もっとも大きい項目は <span class="insight-highlight">${safeCatName}</span> で、全体の約 <span class="insight-highlight">${sharePercent}%</span> を占めています。`
         );
 
         let lastShare = null;
@@ -1719,7 +1752,7 @@
           if (Math.abs(diffShare) >= 0.1) {
             const direction = diffShare > 0 ? "増え" : "減り";
             lines.push(
-              `先月と比べて、${catName}の比率は約 <span class="insight-highlight">${Math.round(
+              `先月と比べて、${safeCatName}の比率は約 <span class="insight-highlight">${Math.round(
                 Math.abs(diffShare) * 100
               )}%</span> ${direction} ました。理由を一言メモに残しておくと、後から家計のストーリーが見えてきます。`
             );
@@ -1954,8 +1987,7 @@
     }
 
     // ===== 初期化 =====
-    function init() {
-      // === 認証ハンドラ ===
+    function initAuthHandlers() {
       document.getElementById("googleSignInBtn").addEventListener("click", async () => {
         const btn = document.getElementById("googleSignInBtn");
         btn.disabled = true;
@@ -1972,7 +2004,7 @@
       document.getElementById("signOutBtn").addEventListener("click", () => {
         if (confirm("ログアウトしますか？")) signOut(auth);
       });
-      // UID バナー操作
+
       const _uidClose = document.getElementById("uidBannerClose");
       if (_uidClose) {
         if (sessionStorage.getItem("uidDismissed")) {
@@ -1989,11 +2021,11 @@
         _uidCopy.addEventListener("click", () => {
           const uid = document.getElementById("currentUID").textContent;
           navigator.clipboard.writeText(uid)
-            .then(() => { _uidCopy.textContent = "✅ コピーしました"; setTimeout(() => (_uidCopy.textContent = "📋 コピー"), 2000); })
+            .then(() => { _uidCopy.textContent = "✅ コピーしました"; setTimeout(() => (_uidCopy.textContent = "📋 コピー"), CONFIG.COPY_RESET_MS); })
             .catch(() => alert("UID: " + uid));
         });
       }
-      // === Auth State ===
+
       onAuthStateChanged(auth, (user) => {
         const gate    = document.getElementById("authGate");
         const appRoot = document.getElementById("appRoot");
@@ -2022,35 +2054,28 @@
           soBtn.style.display = "none";
         }
       });
+    }
 
+    function initNavigationHandlers() {
       document.getElementById("goDashboardBtn").addEventListener("click", () => {
         switchScreen("dashboard");
       });
-
       document.getElementById("newEntryBtn").addEventListener("click", () => {
         editingId = null;
         selectedCategory = null;
         selectedCategoryLabel = null;
         switchScreen("category");
       });
+      document.getElementById("historyMonthFilter").addEventListener("change", renderHistoryList);
+      document.getElementById("historyCategoryFilter").addEventListener("change", renderHistoryList);
+      document.getElementById("chartDimension").addEventListener("change", () => {
+        renderChart();
+        generateForecast();
+      });
+      document.getElementById("chartType").addEventListener("change", renderChart);
+    }
 
-      document
-        .getElementById("historyMonthFilter")
-        .addEventListener("change", renderHistoryList);
-      document
-        .getElementById("historyCategoryFilter")
-        .addEventListener("change", renderHistoryList);
-
-      document
-        .getElementById("chartDimension")
-        .addEventListener("change", () => {
-          renderChart();
-          generateForecast();
-        });
-      document
-        .getElementById("chartType")
-        .addEventListener("change", renderChart);
-
+    function initEntryHandlers() {
       document.getElementById("historyList").addEventListener("click", (event) => {
         const target = event.target;
         if (target.classList.contains("btn-edit")) {
@@ -2064,43 +2089,41 @@
           handleDeleteEntry(id);
         }
       });
-
       document.getElementById("categoryBackBtn").addEventListener("click", () => {
         switchScreen("dashboard");
       });
-
       document.querySelectorAll(".category-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           const category = btn.dataset.category;
           onCategorySelected(category);
         });
       });
-
-      document
-        .getElementById("otherCategoryDecideBtn")
-        .addEventListener("click", () => {
-          const val = document.getElementById("otherCategoryInput").value.trim();
-          if (!val) {
-            alert("その他の用途名を入力してください。");
-            return;
-          }
-          onCategorySelected(val);
-        });
-
+      document.getElementById("otherCategoryDecideBtn").addEventListener("click", () => {
+        const val = document.getElementById("otherCategoryInput").value.trim();
+        if (!val) {
+          alert("その他の用途名を入力してください。");
+          return;
+        }
+        onCategorySelected(val);
+      });
       document.getElementById("entryBackBtn").addEventListener("click", () => {
         switchScreen("category");
       });
-
       document.getElementById("entryCancelBtn").addEventListener("click", () => {
         editingId = null;
         selectedCategory = null;
         selectedCategoryLabel = null;
         switchScreen("dashboard");
       });
-
       document.getElementById("entrySaveBtn").addEventListener("click", () => {
         handleSaveEntry();
       });
+    }
+
+    function init() {
+      initAuthHandlers();
+      initNavigationHandlers();
+      initEntryHandlers();
     }
 
     document.addEventListener("DOMContentLoaded", init);
