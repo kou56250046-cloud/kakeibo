@@ -809,24 +809,25 @@
       .input-base, .input-text, .input-select { font-size: 16px; }
     }
 
-    /* ─── ヘッダー：スマホで折り返し ─── */
-    @media (max-width: 560px) {
-      .app-header {
-        flex-wrap: wrap;
-        gap: 6px;
-        padding: 10px 14px;
-        top: 4px;
-      }
+    /* ─── ヘッダー：スマホは「タイトル＋ログアウトアイコン」のみ ─── */
+    @media (max-width: 640px) {
+      .app-header { padding: 10px 14px; top: 4px; }
+      /* サブタイトル非表示 */
       .app-title-sub { display: none; }
-      .app-title-main { font-size: 1.05rem; }
-      .header-actions { width: 100%; justify-content: flex-end; gap: 6px; }
-      /* ナビゲーションボタン：アイコンのみ表示 */
-      #goDashboardBtn, #signOutBtn { font-size: 0; padding: 10px 12px; min-height: 40px; }
-      #goDashboardBtn .icon, #signOutBtn .icon { font-size: 1.15rem; }
-      /* チップをコンパクトに */
-      .chip { font-size: 0.7rem; padding: 3px 8px; gap: 3px; }
-      /* ユーザー名チップは非表示（スペース確保） */
+      .app-title-main { font-size: 1rem; }
+      /* 今月の支出・ホームボタン・ユーザー名：非表示 */
+      #headerTotalChip,
+      #goDashboardBtn,
       .user-chip { display: none !important; }
+      /* ログアウトボタン：アイコンのみ・コンパクト */
+      #signOutBtn {
+        font-size: 0;
+        padding: 8px 11px;
+        min-height: 38px;
+        border-radius: 12px;
+        gap: 0;
+      }
+      #signOutBtn .icon { font-size: 1.2rem; }
     }
 
     /* ─── カード・余白：極小画面（390px 以下） ─── */
@@ -892,7 +893,7 @@
           <span style="font-size:1rem">👤</span>
           <span id="userName">-</span>
         </div>
-        <div class="chip">
+        <div class="chip" id="headerTotalChip">
           今月の支出：
           <strong id="header-total">¥0</strong>
         </div>
