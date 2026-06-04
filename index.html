@@ -910,15 +910,6 @@
     <main>
       <!-- Screen 1: Dashboard -->
       <section id="screen-dashboard" class="screen active">
-        <div class="uid-banner" id="uidBanner">
-          <button class="uid-banner-close" id="uidBannerClose" title="閉じる">✕</button>
-          <strong>🔐 初回セットアップ — Firestoreルール用UID</strong><br>
-          あなたのUID:<code id="currentUID">ログイン後に表示されます</code>
-          <button class="uid-copy-btn" id="uidCopyBtn">📋 コピー</button>
-          <span style="display:block;margin-top:6px;font-size:.73rem;opacity:.8">
-            2人分のUIDをfirestore.rulesに貼り付けて再デプロイすると2人限定が有効になります。
-          </span>
-        </div>
         <div class="dashboard-grid">
           <!-- Left: Summary + Chart + AI Insight -->
           <div class="card">
@@ -2074,26 +2065,6 @@
         if (confirm("ログアウトしますか？")) signOut(auth);
       });
 
-      const _uidClose = document.getElementById("uidBannerClose");
-      if (_uidClose) {
-        if (sessionStorage.getItem("uidDismissed")) {
-          const b = document.getElementById("uidBanner");
-          if (b) b.style.display = "none";
-        }
-        _uidClose.addEventListener("click", () => {
-          const b = document.getElementById("uidBanner");
-          if (b) { b.style.display = "none"; sessionStorage.setItem("uidDismissed","1"); }
-        });
-      }
-      const _uidCopy = document.getElementById("uidCopyBtn");
-      if (_uidCopy) {
-        _uidCopy.addEventListener("click", () => {
-          const uid = document.getElementById("currentUID").textContent;
-          navigator.clipboard.writeText(uid)
-            .then(() => { _uidCopy.textContent = "✅ コピーしました"; setTimeout(() => (_uidCopy.textContent = "📋 コピー"), CONFIG.COPY_RESET_MS); })
-            .catch(() => alert("UID: " + uid));
-        });
-      }
 
       onAuthStateChanged(auth, (user) => {
         const gate    = document.getElementById("authGate");
@@ -2109,8 +2080,6 @@
           soBtn.style.display = "flex";
           document.getElementById("userName").textContent =
             (user.displayName || user.email || "").split(" ")[0];
-          const uidEl = document.getElementById("currentUID");
-          if (uidEl) uidEl.textContent = user.uid;
           if (!unsubscribeEntries) subscribeEntries();
         } else {
           if (unsubscribeEntries) { unsubscribeEntries(); unsubscribeEntries = null; }
