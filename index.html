@@ -13,8 +13,12 @@
 
   <!-- Chart.js（グラフ用） -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
-    integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqtE"
+    integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt"
     crossorigin="anonymous"></script>
+  <!-- TensorFlow.js（ML予測用） -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.21.0/dist/tf.min.js"
+    integrity="sha384-eNpWlmR/2RYUXSt1uIS/BmGs7YGbq1ud8ZwtYuFvGHKJviVQJYW4ppuiIjQBvUFL"
+    crossorigin="anonymous" defer></script>
 
   <style>
     :root {
@@ -789,6 +793,34 @@
     /* === REDUCED MOTION === */
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
 
+    /* === フェーズ2：新コンポーネント === */
+    .quick-actions{display:flex;gap:10px;margin-bottom:0;flex-wrap:wrap;}
+    .quick-btn{flex:1 1 90px;min-height:52px;border-radius:14px;border:1px solid var(--border-subtle);background:var(--card-bg);color:var(--text-main);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:0.78rem;font-weight:600;transition:transform var(--transition-fast),border-color var(--transition-fast),box-shadow var(--transition-fast);box-shadow:var(--shadow-soft);backdrop-filter:blur(12px);}
+    .quick-btn .icon{font-size:1.3rem;}
+    .quick-btn:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 14px 30px rgba(15,23,42,.9);}
+    .quick-btn:active{transform:scale(.96);}
+    /* 商品マスタ一覧 */
+    .product-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:10px;border:1px solid var(--border-subtle);background:rgba(15,23,42,.7);margin-bottom:6px;font-size:0.82rem;animation:itemIn .3s ease-out both;}
+    .product-item-info{display:flex;flex-direction:column;gap:2px;}
+    .product-item-name{font-weight:600;}
+    .product-item-meta{font-size:0.73rem;color:var(--text-muted);}
+    .product-item-actions{display:flex;gap:6px;flex-shrink:0;}
+    /* 明細購入記録 */
+    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:center;}
+    .purchase-item-row select,.purchase-item-row input{font-size:0.8rem;}
+    @media(max-width:480px){.purchase-item-row{grid-template-columns:1fr 68px 48px 28px;gap:4px;}}
+    /* 価格比較テーブル */
+    .price-table{width:100%;border-collapse:collapse;font-size:0.8rem;margin-top:6px;}
+    .price-table th{text-align:left;padding:5px 8px;font-size:0.72rem;color:var(--text-muted);border-bottom:1px solid var(--border-subtle);}
+    .price-table td{padding:7px 8px;border-bottom:1px solid rgba(148,163,184,.15);}
+    .price-table tr.cheapest td{color:var(--accent);font-weight:700;}
+    .price-table .trend-up{color:var(--danger);font-size:0.72rem;}
+    .price-table .trend-down{color:#4ade80;font-size:0.72rem;}
+    .cycle-badge{font-size:0.72rem;color:var(--text-muted);margin-top:2px;}
+    .cycle-badge.due{color:#fbbf24;}
+    /* 節約余地カード */
+    .saving-insight{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.25);font-size:0.8rem;}
+    .saving-insight strong{color:#4ade80;}
     /* === レスポンシブ対応 === */
 
     /* iPhone / Android セーフエリア（ノッチ・ホームバー） */
@@ -910,6 +942,13 @@
     <main>
       <!-- Screen 1: Dashboard -->
       <section id="screen-dashboard" class="screen active">
+        <!-- クイックアクション：フェーズ2 -->
+        <div class="quick-actions" style="margin-bottom:16px;">
+          <button class="quick-btn" id="goProductsBtn"><span class="icon">📦</span><span>商品マスタ</span></button>
+          <button class="quick-btn" id="goPurchaseBtn"><span class="icon">🧾</span><span>明細で入力</span></button>
+          <button class="quick-btn" id="goPriceBtn"><span class="icon">💰</span><span>価格比較</span></button>
+        </div>
+
         <div class="dashboard-grid">
           <!-- Left: Summary + Chart + AI Insight -->
           <div class="card">
@@ -996,6 +1035,8 @@
                 過去の月別データがたまると、「今月の予測支出」と「来月の予測額」を表示します。
               </div>
             </div>
+            <!-- 節約余地（フェーズ2データがあれば表示） -->
+            <div id="savingInsightSection" style="display:none;"></div>
           </div>
 
           <!-- Right: History -->
@@ -1010,10 +1051,10 @@
                   確定後も、ここから編集・削除できます。
                 </div>
               </div>
-              <span class="pill">
-                <span class="pill-dot"></span>
-                記録を続けるほど、可視化が賢くなります
-              </span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <button class="btn-outline" id="csvExportBtn" style="font-size:0.75rem;padding:4px 10px;min-height:32px;">⬇️ CSV</button>
+                <span class="pill"><span class="pill-dot"></span>記録するほど賢くなります</span>
+              </div>
             </div>
 
             <div class="history-filters">
@@ -1031,6 +1072,7 @@
               </div>
             </div>
 
+            <div id="historyFilterSummary" style="display:none;font-size:0.8rem;color:var(--accent);margin-bottom:6px;padding:5px 10px;border-radius:8px;background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);"></div>
             <div class="history-list" id="historyList"></div>
           </div>
         </div>
@@ -1196,6 +1238,115 @@
           </div>
         </div>
       </section>
+
+      <!-- Screen 4: 商品マスタ -->
+      <section id="screen-products" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title">商品マスタ</div>
+              <div class="screen-subtitle">価格比較の基準となる商品を管理します。</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-primary" id="productAddNewBtn" style="padding:7px 12px;font-size:0.82rem;">＋ 追加</button>
+              <button class="btn-outline" id="productsBackBtn"><span class="icon">←</span> 戻る</button>
+            </div>
+          </div>
+          <!-- 追加/編集フォーム -->
+          <div id="productForm" style="display:none;" class="mt-4">
+            <div class="form-grid form-grid-2col">
+              <div class="input-field">
+                <label class="field-label">商品名 *</label>
+                <input type="text" id="productName" class="input-base" placeholder="例：牛乳（1L）"/>
+              </div>
+              <div class="input-field">
+                <label class="field-label">カテゴリ</label>
+                <select id="productCategory" class="input-base">
+                  <option value="食品・食事">食品・食事</option>
+                  <option value="日用品">日用品</option>
+                  <option value="ベイビーグッズ">ベイビーグッズ</option>
+                  <option value="病院・お薬">病院・お薬</option>
+                  <option value="書籍">書籍</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+            </div>
+            <div class="input-field mt-4">
+              <label class="field-label">メモ（任意）</label>
+              <input type="text" id="productNote" class="input-base" placeholder="例：業務スーパー用、200ml缶 など"/>
+            </div>
+            <div class="form-actions mt-4">
+              <button class="btn-outline" id="productFormCancelBtn">キャンセル</button>
+              <button class="btn-primary" id="productSaveBtn"><span class="icon">💾</span> 保存</button>
+            </div>
+          </div>
+          <!-- 商品一覧 -->
+          <div id="productsList" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
+      <!-- Screen 5: 明細付き購入記録 -->
+      <section id="screen-purchase" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title" id="purchaseScreenTitle">購入記録（明細入力）</div>
+              <div class="screen-subtitle">商品ごとに価格・数量を入力してください。</div>
+            </div>
+            <button class="btn-outline" id="purchaseBackBtn"><span class="icon">←</span> 戻る</button>
+          </div>
+          <div class="form-grid form-grid-2col mt-4">
+            <div class="input-field">
+              <label class="field-label">日付</label>
+              <input type="date" id="purchaseDate" class="input-base"/>
+            </div>
+            <div class="input-field">
+              <label class="field-label">店名 *</label>
+              <input type="text" id="purchaseStore" class="input-base" placeholder="例：ヤオコー中野島店"/>
+            </div>
+          </div>
+          <div class="input-field mt-4">
+            <label class="field-label">メモ（任意）</label>
+            <input type="text" id="purchaseMemo" class="input-base"/>
+          </div>
+          <div style="margin-top:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-size:0.85rem;font-weight:600;">明細</span>
+              <button class="btn-outline" id="addItemRowBtn" style="font-size:0.75rem;padding:4px 10px;min-height:32px;">＋ 行を追加</button>
+            </div>
+            <!-- 列ヘッダー -->
+            <div class="purchase-item-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">
+              <span>商品</span><span>価格(¥)</span><span>数量</span><span></span>
+            </div>
+            <div id="purchaseItemsContainer"></div>
+          </div>
+          <div style="text-align:right;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);font-size:1rem;font-weight:700;">
+            合計：<span id="purchaseTotalDisplay">¥0</span>
+          </div>
+          <div class="form-actions mt-6">
+            <button class="btn-outline" id="purchaseCancelBtn">キャンセル</button>
+            <button class="btn-primary" id="purchaseSaveBtn"><span class="icon">💾</span> 保存</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 6: 価格比較 -->
+      <section id="screen-price" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title">価格比較</div>
+              <div class="screen-subtitle">購入履歴から店別の価格を自動集計します。</div>
+            </div>
+            <button class="btn-outline" id="priceBackBtn"><span class="icon">←</span> 戻る</button>
+          </div>
+          <div class="input-field mt-4">
+            <label class="field-label">比較する商品を選択</label>
+            <select id="priceProductSelect" class="input-base"></select>
+          </div>
+          <div id="priceCompareResult" style="margin-top:14px;"></div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1246,16 +1397,25 @@
     };
 
     // Firestore コレクション参照
-    const entriesCollectionRef = collection(db, "households", HOUSEHOLD_ID, "entries");
+    const entriesCollectionRef  = collection(db, "households", HOUSEHOLD_ID, "entries");
+    const productsCollectionRef = collection(db, "households", HOUSEHOLD_ID, "products");
+    const purchasesCollectionRef= collection(db, "households", HOUSEHOLD_ID, "purchases");
 
     // ====== ローカル状態 ======
     let entries = [];
+    let products = [];
+    let purchases = [];
     let editingId = null;
+    let editingProductId = null;
+    let editingPurchaseId = null;
+    let purchaseItemRows = [];
     let selectedCategory = null;
     let selectedCategoryLabel = null;
     let currentScreen = "dashboard";
     let spendingChart = null;
     let unsubscribeEntries = null;
+    let unsubscribeProducts = null;
+    let unsubscribePurchases = null;
 
     // ====== ユーティリティ ======
     function todayISO() {
@@ -1309,7 +1469,7 @@
     }
 
     // ====== 画面切り替え ======
-    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2 };
+    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1 };
 
     function switchScreen(name) {
       const prevOrder = SCREEN_ORDER[currentScreen] ?? 0;
@@ -1331,8 +1491,11 @@
       const totals = {};
       for (const e of entries) {
         const m = getMonthKey(e.date);
-        if (!m) continue;
-        totals[m] = (totals[m] || 0) + (e.amount || 0);
+        if (m) totals[m] = (totals[m] || 0) + (e.amount || 0);
+      }
+      for (const p of purchases) {
+        const m = getMonthKey(p.date);
+        if (m) totals[m] = (totals[m] || 0) + (p.total || 0);
       }
       return totals;
     }
@@ -1343,6 +1506,13 @@
         if (getMonthKey(e.date) !== monthKey) continue;
         const cat = e.category || "未分類";
         result[cat] = (result[cat] || 0) + (e.amount || 0);
+      }
+      for (const p of purchases) {
+        if (getMonthKey(p.date) !== monthKey) continue;
+        for (const item of (p.items || [])) {
+          const cat = item.category || "未分類";
+          result[cat] = (result[cat] || 0) + (item.price || 0) * (item.qty || 1);
+        }
       }
       return result;
     }
@@ -1395,6 +1565,48 @@
           showToast("データ取得に失敗しました。通信状況を確認してください。");
         }
       });
+    }
+
+    function subscribeProducts() {
+      const q = query(productsCollectionRef, orderBy("name"));
+      unsubscribeProducts = onSnapshot(q, (snap) => {
+        products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderProductsList();
+        renderPurchaseFormProductOptions();
+        renderPriceCompareProductOptions();
+      }, (e) => { console.error("products error:", e); });
+    }
+
+    function subscribePurchases() {
+      const q = query(purchasesCollectionRef, orderBy("date", "desc"));
+      unsubscribePurchases = onSnapshot(q, (snap) => {
+        purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderAll();
+      }, (e) => { console.error("purchases error:", e); });
+    }
+
+    async function saveProductToFirestore(data) {
+      if (editingProductId) {
+        await updateDoc(doc(productsCollectionRef, editingProductId), data);
+      } else {
+        await addDoc(productsCollectionRef, { ...data, createdAt: serverTimestamp() });
+      }
+    }
+
+    async function deleteProductFromFirestore(id) {
+      await deleteDoc(doc(productsCollectionRef, id));
+    }
+
+    async function savePurchaseToFirestore(data) {
+      if (editingPurchaseId) {
+        await updateDoc(doc(purchasesCollectionRef, editingPurchaseId), data);
+      } else {
+        await addDoc(purchasesCollectionRef, { ...data, createdAt: serverTimestamp() });
+      }
+    }
+
+    async function deletePurchaseFromFirestore(id) {
+      await deleteDoc(doc(purchasesCollectionRef, id));
     }
 
     // ====== UI 更新 ======
@@ -1495,11 +1707,24 @@
       filtered.sort((a, b) => {
         const dA = a.date || "";
         const dB = b.date || "";
-        if (dA === dB) {
-          return (b.createdAt || 0) - (a.createdAt || 0);
-        }
+        if (dA === dB) return (b.createdAt || 0) - (a.createdAt || 0);
         return dA > dB ? -1 : 1;
       });
+
+      // FEAT-003: フィルター適用中の合計表示
+      const summaryEl = document.getElementById("historyFilterSummary");
+      if (summaryEl) {
+        if (filtered.length > 0 && (monthFilter !== "all" || categoryFilter !== "all")) {
+          const filteredTotal = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+          const parts = [];
+          if (monthFilter !== "all") parts.push(formatMonthLabel(monthFilter));
+          if (categoryFilter !== "all") parts.push(categoryFilter);
+          summaryEl.textContent = `${parts.join(" の ")}：合計 ${formatCurrencyYen(filteredTotal)}（${filtered.length}件）`;
+          summaryEl.style.display = "block";
+        } else {
+          summaryEl.style.display = "none";
+        }
+      }
 
       if (filtered.length === 0) {
         const div = document.createElement("div");
@@ -1917,6 +2142,350 @@
       forecastEl.innerHTML = lines.join("<br><br>");
     }
 
+    // ===== FEAT-002: CSV エクスポート =====
+    function exportCSV() {
+      const monthFilter = document.getElementById("historyMonthFilter").value;
+      const categoryFilter = document.getElementById("historyCategoryFilter").value;
+      let rows = entries.slice();
+      if (monthFilter !== "all") rows = rows.filter(e => getMonthKey(e.date) === monthFilter);
+      if (categoryFilter !== "all") rows = rows.filter(e => e.category === categoryFilter);
+      rows.sort((a, b) => (a.date > b.date ? -1 : 1));
+      const header = ["日付", "カテゴリ", "金額", "購入場所", "メモ"];
+      const lines = [header.join(",")];
+      for (const r of rows) {
+        lines.push([
+          r.date, r.category, r.amount,
+          `"${(r.place||"").replace(/"/g,'""')}"`,
+          `"${(r.memo||"").replace(/"/g,'""')}"`
+        ].join(","));
+      }
+      const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), {
+        href: url,
+        download: `家計フローナビ_${monthFilter !== "all" ? formatMonthLabel(monthFilter) : "全期間"}.csv`
+      });
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("CSVをダウンロードしました");
+    }
+
+    // ===== 商品マスタ UI =====
+    function renderProductsList() {
+      const el = document.getElementById("productsList");
+      if (!el) return;
+      el.innerHTML = "";
+      if (products.length === 0) {
+        el.innerHTML = '<div class="chart-placeholder">商品がまだ登録されていません。「＋ 追加」から登録してください。</div>';
+        return;
+      }
+      products.forEach((p, i) => {
+        const div = document.createElement("div");
+        div.className = "product-item";
+        div.style.animationDelay = (i * CONFIG.STAGGER_DELAY_S) + "s";
+        const cycle = calcPurchaseCycle(p.id);
+        const cycleHtml = cycle ? `<span class="cycle-badge${cycle.daysSinceLast >= cycle.avgDays ? ' due' : ''}">🔔 平均${cycle.avgDays}日毎（前回から${cycle.daysSinceLast}日）</span>` : "";
+        div.innerHTML = `
+          <div class="product-item-info">
+            <span class="product-item-name">${escapeHTML(p.name)}</span>
+            <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}</span>
+            ${cycleHtml}
+          </div>
+          <div class="product-item-actions">
+            <button class="btn-ghost" data-pid="${p.id}">✏️</button>
+            <button class="btn-danger" data-pdel="${p.id}">🗑</button>
+          </div>`;
+        el.appendChild(div);
+      });
+    }
+
+    function showProductForm(product = null) {
+      editingProductId = product ? product.id : null;
+      document.getElementById("productName").value = product ? product.name : "";
+      document.getElementById("productCategory").value = product ? (product.category || "食品・食事") : "食品・食事";
+      document.getElementById("productNote").value = product ? (product.note || "") : "";
+      document.getElementById("productForm").style.display = "block";
+      document.getElementById("productName").focus();
+    }
+
+    function hideProductForm() {
+      document.getElementById("productForm").style.display = "none";
+      editingProductId = null;
+    }
+
+    async function handleSaveProduct() {
+      const name = document.getElementById("productName").value.trim();
+      if (!name) { alert("商品名を入力してください。"); return; }
+      const data = {
+        name,
+        category: document.getElementById("productCategory").value,
+        note: document.getElementById("productNote").value.trim(),
+      };
+      try {
+        await saveProductToFirestore(data);
+        hideProductForm();
+        showToast("商品を保存しました");
+      } catch (e) {
+        console.error(e);
+        alert("保存に失敗しました。");
+      }
+    }
+
+    // ===== 明細購入記録 UI =====
+    function renderPurchaseFormProductOptions() {
+      document.querySelectorAll(".product-select").forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">商品を選択...</option>';
+        products.forEach(p => {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.name;
+          if (p.id === cur) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      });
+    }
+
+    function addPurchaseItemRow() {
+      const container = document.getElementById("purchaseItemsContainer");
+      const row = document.createElement("div");
+      row.className = "purchase-item-row";
+      row.innerHTML = `
+        <select class="input-base product-select"><option value="">商品を選択...</option>${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select>
+        <input type="number" class="input-base item-price" placeholder="0" min="0" inputmode="decimal"/>
+        <input type="number" class="input-base item-qty" placeholder="1" min="1" value="1" inputmode="decimal"/>
+        <button class="btn-danger item-remove-btn" style="padding:4px 6px;min-height:0;">✕</button>`;
+      row.querySelector(".item-price").addEventListener("input", recalcPurchaseTotal);
+      row.querySelector(".item-qty").addEventListener("input", recalcPurchaseTotal);
+      row.querySelector(".item-remove-btn").addEventListener("click", () => { row.remove(); recalcPurchaseTotal(); });
+      container.appendChild(row);
+    }
+
+    function recalcPurchaseTotal() {
+      let total = 0;
+      document.querySelectorAll(".purchase-item-row").forEach(row => {
+        const price = parseFloat(row.querySelector(".item-price")?.value) || 0;
+        const qty = parseFloat(row.querySelector(".item-qty")?.value) || 1;
+        total += price * qty;
+      });
+      const el = document.getElementById("purchaseTotalDisplay");
+      if (el) el.textContent = formatCurrencyYen(total);
+    }
+
+    function initPurchaseForm() {
+      document.getElementById("purchaseDate").value = todayISO();
+      document.getElementById("purchaseStore").value = "";
+      document.getElementById("purchaseMemo").value = "";
+      document.getElementById("purchaseItemsContainer").innerHTML = "";
+      document.getElementById("purchaseTotalDisplay").textContent = "¥0";
+      editingPurchaseId = null;
+      addPurchaseItemRow();
+    }
+
+    async function handleSavePurchase() {
+      const date = document.getElementById("purchaseDate").value || todayISO();
+      const store = document.getElementById("purchaseStore").value.trim();
+      if (!store) { alert("店名を入力してください。"); return; }
+      const rows = document.querySelectorAll(".purchase-item-row");
+      const items = [];
+      let total = 0;
+      for (const row of rows) {
+        const productId = row.querySelector(".product-select").value;
+        const price = parseFloat(row.querySelector(".item-price").value) || 0;
+        const qty = parseFloat(row.querySelector(".item-qty").value) || 1;
+        if (!productId && price === 0) continue;
+        const product = products.find(p => p.id === productId);
+        items.push({ productId, name: product ? product.name : "不明", price, qty, category: product ? product.category : "未分類" });
+        total += price * qty;
+      }
+      if (items.length === 0) { alert("明細を1行以上入力してください。"); return; }
+      const data = { date, store, total, memo: document.getElementById("purchaseMemo").value.trim(), items };
+      try {
+        await savePurchaseToFirestore(data);
+        switchScreen("dashboard");
+        showToast("購入記録を保存しました");
+      } catch (e) {
+        console.error(e);
+        alert("保存に失敗しました。");
+      }
+    }
+
+    // ===== 価格比較 UI =====
+    function renderPriceCompareProductOptions() {
+      const sel = document.getElementById("priceProductSelect");
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">商品を選択してください</option>';
+      products.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        if (p.id === cur) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (cur) renderPriceCompareResult(cur);
+    }
+
+    function renderPriceCompareResult(productId) {
+      const el = document.getElementById("priceCompareResult");
+      if (!el) return;
+      if (!productId) { el.innerHTML = ""; return; }
+      const storeMap = {};
+      for (const p of purchases) {
+        for (const item of (p.items || [])) {
+          if (item.productId !== productId) continue;
+          const s = p.store;
+          if (!storeMap[s]) storeMap[s] = { prices: [], dates: [] };
+          storeMap[s].prices.push(item.price);
+          storeMap[s].dates.push(p.date);
+        }
+      }
+      const stores = Object.entries(storeMap).map(([store, v]) => {
+        const min = Math.min(...v.prices);
+        const avg = v.prices.reduce((a,b)=>a+b,0)/v.prices.length;
+        const latest = v.prices[v.prices.length-1];
+        const trend = calcPriceTrend(v.dates.map((d,i) => ({ date:d, price:v.prices[i] })));
+        return { store, min, avg, latest, count: v.prices.length, trend };
+      }).sort((a,b) => a.min - b.min);
+
+      if (stores.length === 0) {
+        el.innerHTML = '<div class="chart-placeholder">この商品の購入履歴がまだありません。</div>';
+        return;
+      }
+      const cycle = calcPurchaseCycle(productId);
+      let cycleHtml = "";
+      if (cycle) {
+        const isDue = cycle.daysSinceLast >= cycle.avgDays;
+        cycleHtml = `<div class="cycle-badge${isDue ? ' due' : ''}" style="margin-bottom:10px;">🔔 購買周期：平均 <strong>${cycle.avgDays}日</strong> ごと（前回から <strong>${cycle.daysSinceLast}日</strong> 経過${isDue ? " ⚠️ 補充時期かも" : ""}）</div>`;
+      }
+      const minPrice = stores[0].min;
+      const rows = stores.map((s, i) => {
+        const trendStr = s.trend !== null ? (s.trend > 0 ? `<span class="trend-up">↑ +¥${Math.abs(s.trend).toFixed(0)}/回</span>` : s.trend < 0 ? `<span class="trend-down">↓ -¥${Math.abs(s.trend).toFixed(0)}/回</span>` : "") : "";
+        return `<tr${i===0?' class="cheapest"':''}><td>${escapeHTML(s.store)}</td><td>${formatCurrencyYen(s.min)}${i===0?' 🏆':''}</td><td>${formatCurrencyYen(Math.round(s.avg))}</td><td>${formatCurrencyYen(s.latest)} ${trendStr}</td><td>${s.count}回</td></tr>`;
+      }).join("");
+      el.innerHTML = `${cycleHtml}<table class="price-table"><thead><tr><th>店名</th><th>最安値</th><th>平均</th><th>最新価格</th><th>回数</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    // ===== ML 分析関数 =====
+    function calcPriceTrend(priceHistory) {
+      if (!priceHistory || priceHistory.length < 2) return null;
+      const n = priceHistory.length;
+      const xs = priceHistory.map((_, i) => i);
+      const ys = priceHistory.map(h => h.price);
+      const sumX = xs.reduce((a,b)=>a+b,0), sumY = ys.reduce((a,b)=>a+b,0);
+      const sumXY = xs.reduce((s,x,i)=>s+x*ys[i],0);
+      const sumX2 = xs.reduce((s,x)=>s+x*x,0);
+      const denom = n*sumX2 - sumX*sumX;
+      return denom === 0 ? 0 : (n*sumXY - sumX*sumY) / denom;
+    }
+
+    function calcPurchaseCycle(productId) {
+      const dates = purchases
+        .filter(p => (p.items||[]).some(item => item.productId === productId))
+        .map(p => new Date(p.date).getTime())
+        .sort((a,b) => a-b);
+      if (dates.length < 2) return null;
+      const intervals = dates.slice(1).map((d,i) => (d - dates[i]) / 86400000);
+      const avgDays = Math.round(intervals.reduce((a,b)=>a+b,0) / intervals.length);
+      const daysSinceLast = Math.round((Date.now() - dates[dates.length-1]) / 86400000);
+      return { avgDays, daysSinceLast };
+    }
+
+    function calcSavingOpportunity() {
+      const todayMonth = getMonthKey(todayISO());
+      const minPrices = {};
+      for (const p of purchases) {
+        for (const item of (p.items||[])) {
+          if (!minPrices[item.productId] || item.price < minPrices[item.productId]) minPrices[item.productId] = item.price;
+        }
+      }
+      let totalSaving = 0;
+      const details = [];
+      for (const p of purchases.filter(p => getMonthKey(p.date) === todayMonth)) {
+        for (const item of (p.items||[])) {
+          const minP = minPrices[item.productId];
+          if (minP && item.price > minP) {
+            const saving = (item.price - minP) * (item.qty || 1);
+            totalSaving += saving;
+            details.push({ name: item.name, saving });
+          }
+        }
+      }
+      return { totalSaving, details };
+    }
+
+    function renderSavingInsight() {
+      const insight = calcSavingOpportunity();
+      const el = document.getElementById("savingInsightSection");
+      if (!el) return;
+      if (insight.totalSaving > 0) {
+        const top = insight.details.sort((a,b)=>b.saving-a.saving).slice(0,3);
+        el.innerHTML = `<div class="saving-insight"><strong>💡 今月の節約余地：${formatCurrencyYen(insight.totalSaving)}</strong><br><span style="color:var(--text-muted);font-size:0.75rem;">最安店を選ぶと削減できた推定額${top.length?'（'+top.map(d=>escapeHTML(d.name)+' ¥'+Math.round(d.saving)).join('、')+'）':''}</span></div>`;
+        el.style.display = "block";
+      } else {
+        el.style.display = "none";
+      }
+    }
+
+    async function generateForecastTFJS() {
+      const forecastEl = document.getElementById("forecastText");
+      if (entries.length === 0 && purchases.length === 0) {
+        forecastEl.textContent = "まだ月別のデータがないため、予測ができません。まずは1ヶ月分のデータをためてみましょう。";
+        return;
+      }
+      const monthTotals = getMonthTotals();
+      let months = Object.keys(monthTotals).sort();
+      if (months.length === 0) { forecastEl.textContent = "まだ月別のデータがないため、予測ができません。"; return; }
+
+      const today = new Date();
+      const todayMonthKey = getMonthKey(todayISO());
+      const todayDay = today.getDate();
+      const dim = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+      const thisTotal = monthTotals[todayMonthKey] || 0;
+      const avgPerDay = thisTotal / Math.max(todayDay, 1);
+      const projected = avgPerDay * dim;
+
+      const lines = [];
+      lines.push(`今日までの今月の支出は <span class="insight-highlight">${formatCurrencyYen(thisTotal)}</span> です。`);
+      lines.push(`1日平均 <span class="insight-highlight">${formatCurrencyYen(avgPerDay)}</span> で、今月は <span class="insight-highlight">${formatCurrencyYen(projected)}</span> 前後になりそうです。`);
+
+      if (months.length >= 3 && typeof tf !== "undefined") {
+        try {
+          const ys = months.map(m => monthTotals[m]);
+          const maxY = Math.max(...ys) || 1;
+          const xs = months.map((_, i) => i / months.length);
+          const ysNorm = ys.map(y => y / maxY);
+          const model = tf.sequential({ layers: [
+            tf.layers.dense({ inputShape:[1], units:8, activation:"relu" }),
+            tf.layers.dense({ units:1 })
+          ]});
+          model.compile({ optimizer: tf.train.adam(0.05), loss: "mse" });
+          const xT = tf.tensor2d(xs, [xs.length,1]);
+          const yT = tf.tensor2d(ysNorm, [ysNorm.length,1]);
+          await model.fit(xT, yT, { epochs:200, verbose:0 });
+          const nextX = tf.tensor2d([months.length / months.length], [1,1]);
+          const predNorm = model.predict(nextX).dataSync()[0];
+          const prediction = Math.max(0, predNorm * maxY);
+          tf.dispose([xT, yT, nextX, model]);
+          lines.push(`<strong>🤖 ML予測（TensorFlow.js）</strong>：過去 ${months.length} ヶ月のトレンドから、来月の予測支出は <span class="insight-highlight">${formatCurrencyYen(prediction)}</span> と推定されます。`);
+        } catch (e) { console.warn("TF.js forecast failed:", e); }
+      } else if (months.length >= 2) {
+        const n = months.length;
+        const xs = months.map((_, i) => i);
+        const ys = months.map(m => monthTotals[m]);
+        const sumX = xs.reduce((a,b)=>a+b,0), sumY = ys.reduce((a,b)=>a+b,0);
+        const sumXY = xs.reduce((s,x,i)=>s+x*ys[i],0);
+        const sumX2 = xs.reduce((s,x)=>s+x*x,0);
+        const denom = n*sumX2-sumX*sumX;
+        if (denom !== 0) {
+          const b = (n*sumXY-sumX*sumY)/denom, a = (sumY-b*sumX)/n;
+          const pred = a + b * n;
+          lines.push(`過去データのトレンドから、来月の予測支出はおよそ <span class="insight-highlight">${formatCurrencyYen(Math.max(0,pred))}</span> と推定されます（線形モデル）。`);
+        }
+      }
+      forecastEl.innerHTML = lines.join("<br><br>");
+    }
+
     // ===== 入力フォーム描画 =====
     function renderEntryFormForNew() {
       const entryScreenTitle = document.getElementById("entryScreenTitle");
@@ -1963,7 +2532,8 @@
       renderHistoryList();
       renderChart();
       generateAiAdvice();
-      generateForecast();
+      generateForecastTFJS();
+      renderSavingInsight();
     }
 
     // ===== 保存・削除ハンドラ =====
@@ -2081,9 +2651,13 @@
           document.getElementById("userName").textContent =
             (user.displayName || user.email || "").split(" ")[0];
           if (!unsubscribeEntries) subscribeEntries();
+          if (!unsubscribeProducts) subscribeProducts();
+          if (!unsubscribePurchases) subscribePurchases();
         } else {
           if (unsubscribeEntries) { unsubscribeEntries(); unsubscribeEntries = null; }
-          entries = [];
+          if (unsubscribeProducts) { unsubscribeProducts(); unsubscribeProducts = null; }
+          if (unsubscribePurchases) { unsubscribePurchases(); unsubscribePurchases = null; }
+          entries = []; products = []; purchases = [];
           gate.style.display = "flex";
           setTimeout(() => { gate.style.opacity = "1"; }, 10);
           appRoot.style.display = "none";
@@ -2108,9 +2682,14 @@
       document.getElementById("historyCategoryFilter").addEventListener("change", renderHistoryList);
       document.getElementById("chartDimension").addEventListener("change", () => {
         renderChart();
-        generateForecast();
+        generateForecastTFJS();
       });
       document.getElementById("chartType").addEventListener("change", renderChart);
+      document.getElementById("csvExportBtn").addEventListener("click", exportCSV);
+      // クイックアクション
+      document.getElementById("goProductsBtn").addEventListener("click", () => switchScreen("products"));
+      document.getElementById("goPurchaseBtn").addEventListener("click", () => { initPurchaseForm(); switchScreen("purchase"); });
+      document.getElementById("goPriceBtn").addEventListener("click", () => { renderPriceCompareProductOptions(); switchScreen("price-compare"); });
     }
 
     function initEntryHandlers() {
@@ -2156,6 +2735,25 @@
       document.getElementById("entrySaveBtn").addEventListener("click", () => {
         handleSaveEntry();
       });
+      // 商品マスタ
+      document.getElementById("productAddNewBtn").addEventListener("click", () => showProductForm());
+      document.getElementById("productsBackBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("productFormCancelBtn").addEventListener("click", hideProductForm);
+      document.getElementById("productSaveBtn").addEventListener("click", handleSaveProduct);
+      document.getElementById("productsList").addEventListener("click", async (e) => {
+        const pid = e.target.dataset.pid;
+        const pdel = e.target.dataset.pdel;
+        if (pid) { const p = products.find(x => x.id === pid); if (p) showProductForm(p); }
+        if (pdel) { if (confirm("この商品を削除しますか？")) { await deleteProductFromFirestore(pdel); showToast("削除しました"); } }
+      });
+      // 明細購入記録
+      document.getElementById("purchaseBackBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("purchaseCancelBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("purchaseSaveBtn").addEventListener("click", handleSavePurchase);
+      document.getElementById("addItemRowBtn").addEventListener("click", addPurchaseItemRow);
+      // 価格比較
+      document.getElementById("priceBackBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("priceProductSelect").addEventListener("change", (e) => renderPriceCompareResult(e.target.value));
     }
 
     function init() {
