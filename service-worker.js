@@ -1,7 +1,7 @@
 /* =============================================
    家計フロー・ナビ — Service Worker v1
    ============================================= */
-const CACHE_NAME = 'kakeibo-v1';
+const CACHE_NAME = 'kakeibo-v2';
 
 // キャッシュするアプリシェル（Firestore / Firebase は対象外）
 const SHELL_ASSETS = [
