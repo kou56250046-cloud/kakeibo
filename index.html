@@ -806,7 +806,7 @@
     .product-item-meta{font-size:0.73rem;color:var(--text-muted);}
     .product-item-actions{display:flex;gap:6px;flex-shrink:0;}
     /* 明細購入記録 */
-    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:start;}
+    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:center;}
     .purchase-item-row select,.purchase-item-row input{font-size:0.8rem;}
     .product-input-wrapper{display:flex;flex-direction:column;gap:4px;}
     .product-input-wrapper select,.product-input-wrapper input[type="text"]{font-size:0.8rem;width:100%;}
@@ -1332,8 +1332,9 @@
             </div>
             <!-- 列ヘッダー -->
             <div class="purchase-item-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">
-              <span>商品（新規入力可）</span><span>価格(¥)</span><span>数量</span><span></span>
+              <span>商品名（入力または候補から選択）</span><span>価格(¥)</span><span>数量</span><span></span>
             </div>
+            <datalist id="purchase-products-datalist"></datalist>
             <div id="purchaseItemsContainer"></div>
           </div>
           <div style="text-align:right;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);font-size:1rem;font-weight:700;">
@@ -2487,48 +2488,26 @@
 
     // ===== 明細購入記録 UI =====
     function renderPurchaseFormProductOptions() {
-      document.querySelectorAll(".product-select").forEach(sel => {
-        const cur = sel.value;
-        sel.innerHTML = '<option value="">商品を選択...</option><option value="__new__">＋ 新規入力...</option>';
-        products.forEach(p => {
-          const opt = document.createElement("option");
-          opt.value = p.id;
-          opt.textContent = p.name;
-          if (p.id === cur) opt.selected = true;
-          sel.appendChild(opt);
-        });
-      });
+      const dl = document.getElementById("purchase-products-datalist");
+      if (!dl) return;
+      dl.innerHTML = products.map(p => `<option value="${escapeHTML(p.name)}"></option>`).join("");
     }
 
-    function addPurchaseItemRow() {
+    function addPurchaseItemRow(item = null) {
       const container = document.getElementById("purchaseItemsContainer");
       const row = document.createElement("div");
       row.className = "purchase-item-row";
       row.innerHTML = `
-        <div class="product-input-wrapper">
-          <select class="input-base product-select">
-            <option value="">商品を選択...</option>
-            <option value="__new__">＋ 新規入力...</option>
-            ${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}
-          </select>
-          <input type="text" class="input-base product-name-input" placeholder="商品名を入力" style="display:none;"/>
-        </div>
-        <input type="number" class="input-base item-price" placeholder="0" min="0" inputmode="decimal"/>
-        <input type="number" class="input-base item-qty" placeholder="1" min="1" value="1" inputmode="decimal"/>
+        <input type="text" class="input-base product-name-input" list="purchase-products-datalist"
+               placeholder="商品名を入力または選択" autocomplete="off" value="${item ? escapeHTML(item.name) : ""}"/>
+        <input type="number" class="input-base item-price" placeholder="0" min="0" inputmode="decimal" value="${item ? item.price : ""}"/>
+        <input type="number" class="input-base item-qty" placeholder="1" min="1" value="${item ? item.qty : 1}" inputmode="decimal"/>
         <button class="btn-danger item-remove-btn" style="padding:4px 6px;min-height:0;">✕</button>`;
-      row.querySelector(".product-select").addEventListener("change", (e) => {
-        const nameInput = row.querySelector(".product-name-input");
-        if (e.target.value === "__new__") {
-          nameInput.style.display = "";
-          nameInput.focus();
-        } else {
-          nameInput.style.display = "none";
-        }
-      });
       row.querySelector(".item-price").addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-qty").addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-remove-btn").addEventListener("click", () => { row.remove(); recalcPurchaseTotal(); });
       container.appendChild(row);
+      if (item) recalcPurchaseTotal();
     }
 
     function recalcPurchaseTotal() {
@@ -2559,26 +2538,23 @@
       const rows = document.querySelectorAll(".purchase-item-row");
       const items = [];
       let total = 0;
+      const normName = s => s.replace(/[\s　]+/g, "").toLowerCase();
       for (const row of rows) {
-        const sel = row.querySelector(".product-select");
-        if (!sel) continue;
-        const isNew = sel.value === "__new__";
-        const productId = isNew ? "" : sel.value;
+        const nameInput = row.querySelector(".product-name-input");
+        if (!nameInput) continue;
+        const inputName = nameInput.value.trim();
+        if (!inputName) continue;
         const price = parseFloat(row.querySelector(".item-price").value) || 0;
         const qty = parseFloat(row.querySelector(".item-qty").value) || 1;
-        let name, category;
-        if (isNew) {
-          name = row.querySelector(".product-name-input")?.value.trim() || "";
-          category = "食品・食事";
-          if (!name) continue;
-        } else {
-          const product = products.find(p => p.id === productId);
-          name = product ? product.name : (productId ? "不明" : "");
-          category = product ? product.category : "未分類";
-          if (!productId && price === 0) continue;
-          if (!name) name = "不明";
-        }
-        items.push({ productId, name, price, qty, category });
+        if (price === 0) continue;
+        const matched = products.find(p => normName(p.name) === normName(inputName));
+        items.push({
+          productId: matched ? matched.id : "",
+          name: matched ? matched.name : inputName,
+          price,
+          qty,
+          category: matched ? matched.category : "食品・食事",
+        });
         total += price * qty;
       }
       if (items.length === 0) { alert("明細を1行以上入力してください。"); return; }
