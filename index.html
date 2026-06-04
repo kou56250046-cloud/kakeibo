@@ -788,6 +788,74 @@
     .save-success{animation:successRing .65s ease-out;}
     /* === REDUCED MOTION === */
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
+
+    /* === レスポンシブ対応 === */
+
+    /* iPhone / Android セーフエリア（ノッチ・ホームバー） */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      .app {
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
+      }
+    }
+
+    /* タッチターゲット最低 44px 確保 */
+    .nav-button, .btn-primary, .btn-outline, .category-btn { min-height: 44px; }
+    .btn-ghost, .btn-danger { min-height: 32px; }
+
+    /* iOS: フォーカス時の自動ズーム防止（font-size >= 16px が必要） */
+    @media (hover: none) and (pointer: coarse) {
+      .input-base, .input-text, .input-select { font-size: 16px; }
+    }
+
+    /* ─── ヘッダー：スマホで折り返し ─── */
+    @media (max-width: 560px) {
+      .app-header {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 14px;
+        top: 4px;
+      }
+      .app-title-sub { display: none; }
+      .app-title-main { font-size: 1.05rem; }
+      .header-actions { width: 100%; justify-content: flex-end; gap: 6px; }
+      /* ナビゲーションボタン：アイコンのみ表示 */
+      #goDashboardBtn, #signOutBtn { font-size: 0; padding: 10px 12px; min-height: 40px; }
+      #goDashboardBtn .icon, #signOutBtn .icon { font-size: 1.15rem; }
+      /* チップをコンパクトに */
+      .chip { font-size: 0.7rem; padding: 3px 8px; gap: 3px; }
+      /* ユーザー名チップは非表示（スペース確保） */
+      .user-chip { display: none !important; }
+    }
+
+    /* ─── カード・余白：極小画面（390px 以下） ─── */
+    @media (max-width: 390px) {
+      .app { padding: 10px; gap: 10px; }
+      .card { padding: 12px 10px 10px; border-radius: 14px; }
+      .summary-main-amount { font-size: 1.4rem; }
+      .category-grid { grid-template-columns: repeat(2, 1fr); }
+      .screen-title { font-size: 0.95rem; }
+      .category-btn { min-height: 58px; }
+    }
+
+    /* ─── 履歴アイテム：アクションボタン用の余白 ─── */
+    @media (max-width: 480px) {
+      .history-item { padding-bottom: 38px; }
+    }
+
+    /* ─── フォームアクション：縦並び（モバイル） ─── */
+    @media (max-width: 480px) {
+      .form-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+      .form-actions .btn-primary,
+      .form-actions .btn-outline {
+        width: 100%;
+        justify-content: center;
+      }
+    }
   </style>
 </head>
 <body>
