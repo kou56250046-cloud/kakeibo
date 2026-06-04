@@ -821,6 +821,10 @@
     /* 節約余地カード */
     .saving-insight{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.25);font-size:0.8rem;}
     .saving-insight strong{color:#4ade80;}
+    /* === OCRドラフト行 === */
+    .ocr-draft-row{display:grid;grid-template-columns:1fr 1fr 72px 52px 28px;gap:4px;margin-bottom:6px;align-items:center;}
+    .ocr-draft-row input,.ocr-draft-row select{font-size:0.78rem;padding:5px 7px;}
+    @media(max-width:480px){.ocr-draft-row{grid-template-columns:1fr 1fr 60px 44px 24px;gap:3px;}}
     /* === レスポンシブ対応 === */
 
     /* iPhone / Android セーフエリア（ノッチ・ホームバー） */
@@ -947,6 +951,7 @@
           <button class="quick-btn" id="goProductsBtn"><span class="icon">📦</span><span>商品マスタ</span></button>
           <button class="quick-btn" id="goPurchaseBtn"><span class="icon">🧾</span><span>明細で入力</span></button>
           <button class="quick-btn" id="goPriceBtn"><span class="icon">💰</span><span>価格比較</span></button>
+          <button class="quick-btn" id="goOcrBtn"><span class="icon">📄</span><span>PDF読み込み</span></button>
         </div>
 
         <div class="dashboard-grid">
@@ -1275,6 +1280,10 @@
               <label class="field-label">メモ（任意）</label>
               <input type="text" id="productNote" class="input-base" placeholder="例：業務スーパー用、200ml缶 など"/>
             </div>
+            <div class="input-field mt-4">
+              <label class="field-label">よく買う店（カンマ区切り・任意）</label>
+              <input type="text" id="productPlaces" class="input-base" placeholder="例：ヤオコー中野島店、業務スーパー"/>
+            </div>
             <div class="form-actions mt-4">
               <button class="btn-outline" id="productFormCancelBtn">キャンセル</button>
               <button class="btn-primary" id="productSaveBtn"><span class="icon">💾</span> 保存</button>
@@ -1345,6 +1354,74 @@
             <select id="priceProductSelect" class="input-base"></select>
           </div>
           <div id="priceCompareResult" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
+      <!-- Screen 7: レシートPDF読み込み -->
+      <section id="screen-ocr" class="screen">
+        <div class="card">
+          <div class="screen-header">
+            <div>
+              <div class="screen-title">レシートPDF読み込み</div>
+              <div class="screen-subtitle">vFlat ScanでOCRしたPDFをアップロードしてください。</div>
+            </div>
+            <button class="btn-outline" id="ocrBackBtn"><span class="icon">←</span> 戻る</button>
+          </div>
+
+          <!-- STEP 1: PDFファイル選択 -->
+          <div class="mt-4">
+            <div class="field-label" style="margin-bottom:8px;">STEP 1：PDFファイルを選択</div>
+            <label class="btn-outline" style="cursor:pointer;min-height:44px;display:inline-flex;align-items:center;gap:8px;width:100%;justify-content:center;">
+              <span class="icon">📄</span> PDFを選択する
+              <input type="file" id="ocrPdfInput" accept=".pdf,application/pdf" style="display:none;"/>
+            </label>
+            <div id="ocrFileName" style="margin-top:6px;font-size:0.78rem;color:var(--text-muted);"></div>
+          </div>
+
+          <!-- STEP 2: 店名・日付・解析 -->
+          <div id="ocrStep2" style="display:none;" class="mt-4">
+            <div class="form-grid form-grid-2col">
+              <div class="input-field">
+                <label class="field-label">日付</label>
+                <input type="date" id="ocrDate" class="input-base"/>
+              </div>
+              <div class="input-field">
+                <label class="field-label">店名 *</label>
+                <input type="text" id="ocrStore" class="input-base" placeholder="例：ヤオコー中野島店"/>
+              </div>
+            </div>
+            <div class="input-field mt-4">
+              <label class="field-label">メモ（任意）</label>
+              <input type="text" id="ocrMemo" class="input-base"/>
+            </div>
+            <button class="btn-primary mt-4" id="ocrRunBtn" style="width:100%;justify-content:center;">
+              <span class="icon">🔍</span> テキストを抽出して解析する
+            </button>
+            <div id="ocrProgress" style="display:none;margin-top:8px;font-size:0.78rem;color:var(--text-muted);">
+              <span class="spinner"></span> PDFを解析中...
+            </div>
+          </div>
+
+          <!-- STEP 3: ドラフト確認・編集 -->
+          <div id="ocrStep3" style="display:none;" class="mt-4">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:0.85rem;font-weight:600;">読み取り結果（確認・編集）</span>
+              <button class="btn-outline" id="ocrAddRowBtn" style="font-size:0.75rem;padding:4px 10px;min-height:32px;">＋ 行を追加</button>
+            </div>
+            <div class="ocr-draft-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">
+              <span>読み取り名</span><span>商品マスタ</span><span>価格</span><span>数量</span><span></span>
+            </div>
+            <div id="ocrDraftContainer"></div>
+            <div style="text-align:right;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);font-size:1rem;font-weight:700;">
+              合計：<span id="ocrTotalDisplay">¥0</span>
+            </div>
+          </div>
+
+          <!-- 保存ボタン -->
+          <div class="form-actions mt-6" id="ocrSaveArea" style="display:none;">
+            <button class="btn-outline" id="ocrCancelBtn">キャンセル</button>
+            <button class="btn-primary" id="ocrSaveBtn"><span class="icon">💾</span> 購入記録として保存</button>
+          </div>
         </div>
       </section>
     </main>
@@ -1469,7 +1546,7 @@
     }
 
     // ====== 画面切り替え ======
-    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1 };
+    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1, ocr: 1 };
 
     function switchScreen(name) {
       const prevOrder = SCREEN_ORDER[currentScreen] ?? 0;
@@ -2142,6 +2219,158 @@
       forecastEl.innerHTML = lines.join("<br><br>");
     }
 
+    // ===== PDF読み込み（レシートOCR） =====
+    let _pdfjs = null;
+
+    async function loadPdfJs() {
+      if (_pdfjs) return _pdfjs;
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+        s.onload = () => {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+          _pdfjs = pdfjsLib;
+          resolve(_pdfjs);
+        };
+        s.onerror = () => reject(new Error("PDF.jsの読み込みに失敗しました"));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function extractTextFromPdf(file) {
+      const lib = await loadPdfJs();
+      const buf = await file.arrayBuffer();
+      const pdf = await lib.getDocument({ data: buf }).promise;
+      const allLines = [];
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const lineMap = {};
+        for (const item of content.items) {
+          if (!item.str?.trim()) continue;
+          const y = Math.round(item.transform[5]);
+          if (!lineMap[y]) lineMap[y] = [];
+          lineMap[y].push({ x: item.transform[4], str: item.str });
+        }
+        Object.keys(lineMap).map(Number).sort((a, b) => b - a).forEach(y => {
+          const line = lineMap[y].sort((a, b) => a.x - b.x).map(t => t.str).join("");
+          if (line.trim()) allLines.push(line.trim());
+        });
+      }
+      return allLines.join("\n");
+    }
+
+    function parseReceiptText(text) {
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const items = [];
+      const skipPattern = /合計|小計|税|お釣り|釣り銭|ポイント|レシート|領収|割引|値引|円引|OFF|会員|クーポン|おつり/;
+      for (const line of lines) {
+        if (skipPattern.test(line)) continue;
+        const match = line.match(/([\d,]{2,7})\s*$/);
+        if (!match) continue;
+        const price = parseInt(match[1].replace(/,/g, ""));
+        if (price < 10 || price > 50000) continue;
+        const rawName = line.slice(0, line.length - match[0].length).trim()
+          .replace(/^[*＊・\-－×]+/, "").trim();
+        if (!rawName) continue;
+        items.push({ rawName, price, qty: 1 });
+      }
+      return items;
+    }
+
+    function findMatchingProduct(rawName) {
+      const norm = s => s.replace(/[\s　]+/g, "").replace(/[（(][^）)]*[）)]/g, "");
+      const n = norm(rawName);
+      if (n.length < 1) return null;
+      return products.find(p => norm(p.name) === n)
+          || products.find(p => { const pn = norm(p.name); return pn.length >= 2 && (n.includes(pn) || pn.includes(n)); })
+          || null;
+    }
+
+    function recalcOcrTotal() {
+      let total = 0;
+      document.querySelectorAll("#ocrDraftContainer .ocr-draft-row").forEach(row => {
+        const price = parseFloat(row.querySelector(".ocr-item-price")?.value) || 0;
+        const qty = parseFloat(row.querySelector(".ocr-item-qty")?.value) || 1;
+        total += price * qty;
+      });
+      const el = document.getElementById("ocrTotalDisplay");
+      if (el) el.textContent = formatCurrencyYen(total);
+    }
+
+    function renderOcrDraftRow(item = { rawName: "", price: 0, qty: 1 }) {
+      const matched = findMatchingProduct(item.rawName);
+      const row = document.createElement("div");
+      row.className = "ocr-draft-row";
+      const opts = products.map(p =>
+        `<option value="${p.id}"${matched?.id === p.id ? " selected" : ""}>${escapeHTML(p.name)}</option>`
+      ).join("");
+      row.innerHTML = `
+        <input type="text" class="input-base ocr-item-name" value="${escapeHTML(item.rawName)}" placeholder="商品名"/>
+        <select class="input-base ocr-product-select">
+          <option value="">（未登録）</option>
+          ${opts}
+          <option value="__new__">＋ 新規登録</option>
+        </select>
+        <input type="number" class="input-base ocr-item-price" value="${item.price}" min="0" inputmode="decimal"/>
+        <input type="number" class="input-base ocr-item-qty" value="${item.qty}" min="1" inputmode="decimal"/>
+        <button class="btn-danger ocr-remove-btn" style="padding:3px 5px;min-height:0;">✕</button>`;
+      row.querySelector(".ocr-item-price").addEventListener("input", recalcOcrTotal);
+      row.querySelector(".ocr-item-qty").addEventListener("input", recalcOcrTotal);
+      row.querySelector(".ocr-remove-btn").addEventListener("click", () => { row.remove(); recalcOcrTotal(); });
+      row.querySelector(".ocr-product-select").addEventListener("change", async (e) => {
+        if (e.target.value !== "__new__") return;
+        const name = row.querySelector(".ocr-item-name").value.trim() || "新規商品";
+        if (!confirm(`「${name}」を商品マスタに新規登録しますか？`)) { e.target.value = ""; return; }
+        try {
+          const ref = await addDoc(productsCollectionRef, {
+            name, category: "食品・食事", note: "", places: [], createdAt: serverTimestamp()
+          });
+          const opt = document.createElement("option");
+          opt.value = ref.id; opt.textContent = name; opt.selected = true;
+          e.target.insertBefore(opt, e.target.lastElementChild);
+          e.target.value = ref.id;
+          showToast("商品マスタに追加しました");
+        } catch { alert("登録に失敗しました"); e.target.value = ""; }
+      });
+      return row;
+    }
+
+    async function handleOcrSave() {
+      const date = document.getElementById("ocrDate").value || todayISO();
+      const store = document.getElementById("ocrStore").value.trim();
+      if (!store) { alert("店名を入力してください。"); return; }
+      const rows = document.querySelectorAll("#ocrDraftContainer .ocr-draft-row");
+      const items = [];
+      let total = 0;
+      for (const row of rows) {
+        const productId = row.querySelector(".ocr-product-select").value;
+        if (productId === "__new__") continue;
+        const price = parseFloat(row.querySelector(".ocr-item-price").value) || 0;
+        const qty = parseFloat(row.querySelector(".ocr-item-qty").value) || 1;
+        if (!productId && price === 0) continue;
+        const product = products.find(p => p.id === productId);
+        const name = product?.name || row.querySelector(".ocr-item-name").value.trim() || "不明";
+        items.push({ productId: productId || "", name, price, qty, category: product?.category || "未分類" });
+        total += price * qty;
+      }
+      if (items.length === 0) { alert("保存する明細がありません。"); return; }
+      try {
+        await savePurchaseToFirestore({ date, store, total, memo: document.getElementById("ocrMemo").value.trim(), items });
+        for (const item of items) {
+          if (!item.productId) continue;
+          const prod = products.find(p => p.id === item.productId);
+          const cur = prod?.places || [];
+          if (!cur.includes(store)) {
+            await updateDoc(doc(productsCollectionRef, item.productId), { places: [...cur, store] });
+          }
+        }
+        switchScreen("dashboard");
+        showToast("購入記録を保存しました");
+      } catch (e) { console.error(e); alert("保存に失敗しました。"); }
+    }
+
     // ===== FEAT-002: CSV エクスポート =====
     function exportCSV() {
       const monthFilter = document.getElementById("historyMonthFilter").value;
@@ -2185,10 +2414,12 @@
         div.style.animationDelay = (i * CONFIG.STAGGER_DELAY_S) + "s";
         const cycle = calcPurchaseCycle(p.id);
         const cycleHtml = cycle ? `<span class="cycle-badge${cycle.daysSinceLast >= cycle.avgDays ? ' due' : ''}">🔔 平均${cycle.avgDays}日毎（前回から${cycle.daysSinceLast}日）</span>` : "";
+        const placesHtml = (p.places||[]).map(pl => `<span class="summary-tag" style="font-size:0.68rem;">🏪 ${escapeHTML(pl)}</span>`).join("");
         div.innerHTML = `
           <div class="product-item-info">
             <span class="product-item-name">${escapeHTML(p.name)}</span>
             <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}</span>
+            ${placesHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">${placesHtml}</div>` : ""}
             ${cycleHtml}
           </div>
           <div class="product-item-actions">
@@ -2204,6 +2435,7 @@
       document.getElementById("productName").value = product ? product.name : "";
       document.getElementById("productCategory").value = product ? (product.category || "食品・食事") : "食品・食事";
       document.getElementById("productNote").value = product ? (product.note || "") : "";
+      document.getElementById("productPlaces").value = (product?.places || []).join("、");
       document.getElementById("productForm").style.display = "block";
       document.getElementById("productName").focus();
     }
@@ -2220,6 +2452,8 @@
         name,
         category: document.getElementById("productCategory").value,
         note: document.getElementById("productNote").value.trim(),
+        places: document.getElementById("productPlaces").value
+          .split(/[、,，]/).map(s => s.trim()).filter(Boolean),
       };
       try {
         await saveProductToFirestore(data);
@@ -2302,6 +2536,14 @@
       const data = { date, store, total, memo: document.getElementById("purchaseMemo").value.trim(), items };
       try {
         await savePurchaseToFirestore(data);
+        for (const item of items) {
+          if (!item.productId) continue;
+          const prod = products.find(p => p.id === item.productId);
+          const cur = prod?.places || [];
+          if (!cur.includes(store)) {
+            await updateDoc(doc(productsCollectionRef, item.productId), { places: [...cur, store] });
+          }
+        }
         switchScreen("dashboard");
         showToast("購入記録を保存しました");
       } catch (e) {
@@ -2754,6 +2996,60 @@
       // 価格比較
       document.getElementById("priceBackBtn").addEventListener("click", () => switchScreen("dashboard"));
       document.getElementById("priceProductSelect").addEventListener("change", (e) => renderPriceCompareResult(e.target.value));
+      // PDF読み込みOCR
+      document.getElementById("goOcrBtn").addEventListener("click", () => {
+        document.getElementById("ocrDate").value = todayISO();
+        document.getElementById("ocrStore").value = "";
+        document.getElementById("ocrMemo").value = "";
+        document.getElementById("ocrFileName").textContent = "";
+        document.getElementById("ocrStep2").style.display = "none";
+        document.getElementById("ocrStep3").style.display = "none";
+        document.getElementById("ocrSaveArea").style.display = "none";
+        document.getElementById("ocrDraftContainer").innerHTML = "";
+        document.getElementById("ocrTotalDisplay").textContent = "¥0";
+        switchScreen("ocr");
+      });
+      document.getElementById("ocrBackBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("ocrCancelBtn").addEventListener("click", () => switchScreen("dashboard"));
+      document.getElementById("ocrAddRowBtn").addEventListener("click", () => {
+        document.getElementById("ocrDraftContainer").appendChild(renderOcrDraftRow());
+        recalcOcrTotal();
+      });
+      document.getElementById("ocrSaveBtn").addEventListener("click", handleOcrSave);
+      document.getElementById("ocrPdfInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById("ocrFileName").textContent = `📄 ${file.name}`;
+        document.getElementById("ocrStep2").style.display = "block";
+        document.getElementById("ocrRunBtn")._file = file;
+      });
+      document.getElementById("ocrRunBtn").addEventListener("click", async () => {
+        const file = document.getElementById("ocrRunBtn")._file;
+        if (!file) return;
+        document.getElementById("ocrProgress").style.display = "block";
+        document.getElementById("ocrRunBtn").disabled = true;
+        try {
+          const text = await extractTextFromPdf(file);
+          const items = parseReceiptText(text);
+          document.getElementById("ocrStep3").style.display = "block";
+          document.getElementById("ocrSaveArea").style.display = "flex";
+          const container = document.getElementById("ocrDraftContainer");
+          container.innerHTML = "";
+          if (items.length === 0) {
+            container.innerHTML = '<div class="chart-placeholder">商品行が検出されませんでした。手動で「＋ 行を追加」してください。</div>';
+          } else {
+            items.forEach(item => container.appendChild(renderOcrDraftRow(item)));
+            showToast(`${items.length}件の商品を検出しました`);
+          }
+          recalcOcrTotal();
+        } catch (err) {
+          console.error(err);
+          alert("PDF解析に失敗しました。vFlat ScanでOCRしたテキスト層付きPDFか確認してください。");
+        } finally {
+          document.getElementById("ocrProgress").style.display = "none";
+          document.getElementById("ocrRunBtn").disabled = false;
+        }
+      });
     }
 
     function init() {
