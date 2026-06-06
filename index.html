@@ -824,10 +824,15 @@
     /* 節約余地カード */
     .saving-insight{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.25);font-size:0.8rem;}
     .saving-insight strong{color:#4ade80;}
-    /* === OCRドラフト行 === */
-    .ocr-draft-row{display:grid;grid-template-columns:1fr 1fr 72px 52px 28px;gap:4px;margin-bottom:6px;align-items:center;}
-    .ocr-draft-row input,.ocr-draft-row select{font-size:0.78rem;padding:5px 7px;}
-    @media(max-width:480px){.ocr-draft-row{grid-template-columns:1fr 1fr 60px 44px 24px;gap:3px;}}
+    /* === OCRレシートカード === */
+    .ocr-receipt-card{border:1px solid var(--border-subtle);border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(15,23,42,0.6);}
+    .ocr-receipt-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+    .ocr-receipt-store{font-weight:600;font-size:0.9rem;}
+    .ocr-receipt-date{font-size:0.75rem;color:var(--text-muted);margin-top:2px;}
+    .ocr-receipt-total{font-size:1rem;font-weight:700;color:var(--accent);}
+    .ocr-receipt-count{font-size:0.75rem;color:var(--text-muted);}
+    .ocr-receipt-items{border-top:1px dashed var(--border-subtle);padding-top:8px;}
+    .ocr-receipt-item-row{display:flex;justify-content:space-between;font-size:0.78rem;padding:2px 0;color:var(--text-muted);}
     /* === レスポンシブ対応 === */
 
     /* iPhone / Android セーフエリア（ノッチ・ホームバー） */
@@ -1371,64 +1376,26 @@
           <div class="screen-header">
             <div>
               <div class="screen-title">レシートPDF読み込み</div>
-              <div class="screen-subtitle">vFlat ScanでOCRしたPDFをアップロードしてください。</div>
+              <div class="screen-subtitle">PDFを選ぶと自動で全レシートを解析します</div>
             </div>
             <button class="btn-outline" id="ocrBackBtn"><span class="icon">←</span> 戻る</button>
           </div>
-
-          <!-- STEP 1: PDFファイル選択 -->
-          <div class="mt-4">
-            <div class="field-label" style="margin-bottom:8px;">STEP 1：PDFファイルを選択</div>
-            <label class="btn-outline" style="cursor:pointer;min-height:44px;display:inline-flex;align-items:center;gap:8px;width:100%;justify-content:center;">
-              <span class="icon">📄</span> PDFを選択する
-              <input type="file" id="ocrPdfInput" accept=".pdf,application/pdf" style="display:none;"/>
-            </label>
-            <div id="ocrFileName" style="margin-top:6px;font-size:0.78rem;color:var(--text-muted);"></div>
+          <label class="btn-outline mt-4"
+                 style="cursor:pointer;width:100%;justify-content:center;min-height:52px;display:inline-flex;align-items:center;gap:8px;">
+            <span class="icon">📄</span>
+            <span id="ocrFileNameLabel">PDFを選択する</span>
+            <input type="file" id="ocrPdfInput" accept=".pdf,application/pdf" style="display:none;"/>
+          </label>
+          <div id="ocrProgress" style="display:none;text-align:center;padding:16px 0;">
+            <span class="spinner"></span>
+            <span style="margin-left:8px;font-size:0.85rem;color:var(--text-muted);">PDFを解析中...</span>
           </div>
-
-          <!-- STEP 2: 店名・日付・解析 -->
-          <div id="ocrStep2" style="display:none;" class="mt-4">
-            <div class="form-grid form-grid-2col">
-              <div class="input-field">
-                <label class="field-label">日付</label>
-                <input type="date" id="ocrDate" class="input-base"/>
-              </div>
-              <div class="input-field">
-                <label class="field-label">店名 *</label>
-                <input type="text" id="ocrStore" class="input-base" placeholder="例：ヤオコー中野島店"/>
-              </div>
-            </div>
-            <div class="input-field mt-4">
-              <label class="field-label">メモ（任意）</label>
-              <input type="text" id="ocrMemo" class="input-base"/>
-            </div>
-            <button class="btn-primary mt-4" id="ocrRunBtn" style="width:100%;justify-content:center;">
-              <span class="icon">🔍</span> テキストを抽出して解析する
+          <div id="ocrReceiptList" style="display:none;" class="mt-4"></div>
+          <div id="ocrBatchSaveArea" style="display:none;" class="mt-6">
+            <button class="btn-primary" id="ocrBatchSaveBtn" style="width:100%;justify-content:center;">
+              <span class="icon">💾</span>
+              <span id="ocrBatchSaveLabel">保存する</span>
             </button>
-            <div id="ocrProgress" style="display:none;margin-top:8px;font-size:0.78rem;color:var(--text-muted);">
-              <span class="spinner"></span> PDFを解析中...
-            </div>
-          </div>
-
-          <!-- STEP 3: ドラフト確認・編集 -->
-          <div id="ocrStep3" style="display:none;" class="mt-4">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <span style="font-size:0.85rem;font-weight:600;">読み取り結果（確認・編集）</span>
-              <button class="btn-outline" id="ocrAddRowBtn" style="font-size:0.75rem;padding:4px 10px;min-height:32px;">＋ 行を追加</button>
-            </div>
-            <div class="ocr-draft-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">
-              <span>読み取り名</span><span>商品マスタ</span><span>価格</span><span>数量</span><span></span>
-            </div>
-            <div id="ocrDraftContainer"></div>
-            <div style="text-align:right;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);font-size:1rem;font-weight:700;">
-              合計：<span id="ocrTotalDisplay">¥0</span>
-            </div>
-          </div>
-
-          <!-- 保存ボタン -->
-          <div class="form-actions mt-6" id="ocrSaveArea" style="display:none;">
-            <button class="btn-outline" id="ocrCancelBtn">キャンセル</button>
-            <button class="btn-primary" id="ocrSaveBtn"><span class="icon">💾</span> 購入記録として保存</button>
           </div>
         </div>
       </section>
@@ -2269,24 +2236,6 @@
       return allLines.join("\n");
     }
 
-    function parseReceiptText(text) {
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-      const items = [];
-      const skipPattern = /合計|小計|税|お釣り|釣り銭|ポイント|レシート|領収|割引|値引|円引|OFF|会員|クーポン|おつり/;
-      for (const line of lines) {
-        if (skipPattern.test(line)) continue;
-        const match = line.match(/([\d,]{2,7})\s*$/);
-        if (!match) continue;
-        const price = parseInt(match[1].replace(/,/g, ""));
-        if (price < 10 || price > 50000) continue;
-        const rawName = line.slice(0, line.length - match[0].length).trim()
-          .replace(/^[*＊・\-－×]+/, "").trim();
-        if (!rawName) continue;
-        items.push({ rawName, price, qty: 1 });
-      }
-      return items;
-    }
-
     function findMatchingProduct(rawName) {
       const norm = s => s.replace(/[\s　]+/g, "").replace(/[（(][^）)]*[）)]/g, "");
       const n = norm(rawName);
@@ -2296,98 +2245,132 @@
           || null;
     }
 
-    function recalcOcrTotal() {
-      let total = 0;
-      document.querySelectorAll("#ocrDraftContainer .ocr-draft-row").forEach(row => {
-        const price = parseFloat(row.querySelector(".ocr-item-price")?.value) || 0;
-        const qty = parseFloat(row.querySelector(".ocr-item-qty")?.value) || 1;
-        total += price * qty;
-      });
-      const el = document.getElementById("ocrTotalDisplay");
-      if (el) el.textContent = formatCurrencyYen(total);
-    }
-
-    function renderOcrDraftRow(item = { rawName: "", price: 0, qty: 1 }) {
-      const matched = findMatchingProduct(item.rawName);
-      const row = document.createElement("div");
-      row.className = "ocr-draft-row";
-      const opts = products.map(p =>
-        `<option value="${p.id}"${matched?.id === p.id ? " selected" : ""}>${escapeHTML(p.name)}</option>`
-      ).join("");
-      row.innerHTML = `
-        <input type="text" class="input-base ocr-item-name" value="${escapeHTML(item.rawName)}" placeholder="商品名"/>
-        <select class="input-base ocr-product-select">
-          <option value="">（未登録）</option>
-          ${opts}
-          <option value="__new__">＋ 新規登録</option>
-        </select>
-        <input type="number" class="input-base ocr-item-price" value="${item.price}" min="0" inputmode="decimal"/>
-        <input type="number" class="input-base ocr-item-qty" value="${item.qty}" min="1" inputmode="decimal"/>
-        <button class="btn-danger ocr-remove-btn" style="padding:3px 5px;min-height:0;">✕</button>`;
-      row.querySelector(".ocr-item-price").addEventListener("input", recalcOcrTotal);
-      row.querySelector(".ocr-item-qty").addEventListener("input", recalcOcrTotal);
-      row.querySelector(".ocr-remove-btn").addEventListener("click", () => { row.remove(); recalcOcrTotal(); });
-      row.querySelector(".ocr-product-select").addEventListener("change", async (e) => {
-        if (e.target.value !== "__new__") return;
-        const name = row.querySelector(".ocr-item-name").value.trim() || "新規商品";
-        if (!confirm(`「${name}」を商品マスタに新規登録しますか？`)) { e.target.value = ""; return; }
-        try {
-          const initPrice = parseFloat(row.querySelector(".ocr-item-price")?.value) || 0;
-          const ref = await addDoc(productsCollectionRef, {
-            name, category: "食品・食事", note: "", places: [], price: initPrice, createdAt: serverTimestamp()
-          });
-          const opt = document.createElement("option");
-          opt.value = ref.id; opt.textContent = name; opt.selected = true;
-          e.target.insertBefore(opt, e.target.lastElementChild);
-          e.target.value = ref.id;
-          showToast("商品マスタに追加しました");
-        } catch { alert("登録に失敗しました"); e.target.value = ""; }
-      });
-      return row;
-    }
-
-    async function handleOcrSave() {
-      const date = document.getElementById("ocrDate").value || todayISO();
-      const store = document.getElementById("ocrStore").value.trim();
-      if (!store) { alert("店名を入力してください。"); return; }
-      const rows = document.querySelectorAll("#ocrDraftContainer .ocr-draft-row");
-      const items = [];
-      let total = 0;
-      for (const row of rows) {
-        const productId = row.querySelector(".ocr-product-select").value;
-        if (productId === "__new__") continue;
-        const price = parseFloat(row.querySelector(".ocr-item-price").value) || 0;
-        const qty = parseFloat(row.querySelector(".ocr-item-qty").value) || 1;
-        if (!productId && price === 0) continue;
-        const product = products.find(p => p.id === productId);
-        const name = product?.name || row.querySelector(".ocr-item-name").value.trim() || "不明";
-        items.push({ productId: productId || "", name, price, qty, category: product?.category || "未分類" });
-        total += price * qty;
+    function parseMultipleReceipts(text) {
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const receipts = [];
+      let current = null;
+      let prevLine = "";
+      const dateRe = /(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})日?/;
+      const totalRe = /(?:合計|税込総額|小計)[^\d]*([\d,]+)/;
+      const skipRe = /^(?:合計|小計|税|お釣り|釣り銭|ポイント|レシート|領収|割引|値引|円引|OFF|会員|クーポン|おつり|商品名|数量|金額)/;
+      const discountRe = /--[¥￥]|値引|割引|OFF/i;
+      const itemRe = /^(.+?)\s+(\d+)\s+[¥￥]?([\d,]+)\s*$/;
+      const itemRe2 = /^(.+?)([\d,]{2,7})\s*$/;
+      for (const line of lines) {
+        const dm = line.match(dateRe);
+        if (dm) {
+          const dateStr = `${dm[1]}-${String(dm[2]).padStart(2,"0")}-${String(dm[3]).padStart(2,"0")}`;
+          const storePart = line.replace(dateRe, "").replace(/^【\d+】/, "").trim();
+          const store = storePart || prevLine;
+          current = { store, date: dateStr, total: 0, items: [] };
+          receipts.push(current);
+          prevLine = "";
+          continue;
+        }
+        if (!current) { prevLine = line; continue; }
+        const tm = line.match(totalRe);
+        if (tm) { current.total = parseInt(tm[1].replace(/,/g, "")); continue; }
+        if (skipRe.test(line) || discountRe.test(line)) continue;
+        const im = line.match(itemRe);
+        if (im) {
+          const price = parseInt(im[3].replace(/,/g, ""));
+          const qty = parseInt(im[2]) || 1;
+          if (price >= 10 && price <= 100000) { current.items.push({ rawName: im[1].trim(), price, qty }); continue; }
+        }
+        const im2 = line.match(itemRe2);
+        if (im2) {
+          const price = parseInt(im2[2].replace(/,/g, ""));
+          const rawName = im2[1].trim();
+          if (price >= 10 && price <= 100000 && rawName.length >= 2) { current.items.push({ rawName, price, qty: 1 }); continue; }
+        }
+        prevLine = line;
       }
-      if (items.length === 0) { alert("保存する明細がありません。"); return; }
+      return receipts.filter(r => r.items.length > 0);
+    }
+
+    function renderOcrReceiptCard(receipt) {
+      const card = document.createElement("div");
+      card.className = "ocr-receipt-card";
+      const itemsHtml = receipt.items.map(it =>
+        `<div class="ocr-receipt-item-row">
+           <span>${escapeHTML(it.rawName)}${it.qty > 1 ? " × " + it.qty : ""}</span>
+           <span>${formatCurrencyYen(it.price * it.qty)}</span>
+         </div>`
+      ).join("");
+      card.innerHTML = `
+        <div class="ocr-receipt-card-header">
+          <div>
+            <div class="ocr-receipt-store">${escapeHTML(receipt.store)}</div>
+            <div class="ocr-receipt-date">${receipt.date}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="ocr-receipt-total">${formatCurrencyYen(receipt.total)}</div>
+            <div class="ocr-receipt-count">${receipt.items.length}品</div>
+          </div>
+        </div>
+        <div class="ocr-receipt-items">${itemsHtml}</div>`;
+      return card;
+    }
+
+    async function updateProductStorePrice(productId, store, price, date) {
+      const prod = products.find(p => p.id === productId);
+      if (!prod) return;
+      const cur = prod.storePrices || {};
+      const newStorePrices = { ...cur, [store]: { price, date } };
+      const minPrice = Math.min(...Object.values(newStorePrices).map(v => v.price));
+      const upd = { storePrices: newStorePrices, price: minPrice };
+      const curPlaces = prod.places || [];
+      if (!curPlaces.includes(store)) upd.places = [...curPlaces, store];
+      await updateDoc(doc(productsCollectionRef, productId), upd);
+    }
+
+    async function handleOcrSaveBatch(receipts) {
+      const btn = document.getElementById("ocrBatchSaveBtn");
+      const label = document.getElementById("ocrBatchSaveLabel");
+      btn.disabled = true;
+      label.textContent = "保存中...";
       try {
-        await savePurchaseToFirestore({ date, store, total, memo: document.getElementById("ocrMemo").value.trim(), items });
-        for (const item of items) {
-          if (item.productId) {
-            const prod = products.find(p => p.id === item.productId);
-            const cur = prod?.places || [];
-            const upd = { price: item.price };
-            if (!cur.includes(store)) upd.places = [...cur, store];
-            await updateDoc(doc(productsCollectionRef, item.productId), upd);
-          } else if (item.name && item.name !== "不明") {
-            await addDoc(productsCollectionRef, {
-              name: item.name,
-              category: item.category || "食品・食事",
-              note: "",
-              price: item.price,
-              places: [store],
-              createdAt: serverTimestamp(),
-            });
+        for (const receipt of receipts) {
+          const items = [];
+          let calcTotal = 0;
+          for (const raw of receipt.items) {
+            const matched = findMatchingProduct(raw.rawName);
+            let productId = matched?.id || "";
+            if (!matched) {
+              try {
+                const ref = await addDoc(productsCollectionRef, {
+                  name: raw.rawName, category: "食品・食事", note: "",
+                  price: raw.price,
+                  storePrices: { [receipt.store]: { price: raw.price, date: receipt.date } },
+                  places: [receipt.store], createdAt: serverTimestamp(),
+                });
+                productId = ref.id;
+              } catch (e) { console.warn("商品マスタ登録失敗:", raw.rawName); }
+            } else {
+              try { await updateProductStorePrice(matched.id, receipt.store, raw.price, receipt.date); }
+              catch (e) { console.warn("商品マスタ更新失敗:", matched.name); }
+            }
+            const name = matched?.name || raw.rawName;
+            const category = matched?.category || "食品・食事";
+            items.push({ productId, name, price: raw.price, qty: raw.qty, category });
+            calcTotal += raw.price * raw.qty;
           }
+          await savePurchaseToFirestore({
+            date: receipt.date || todayISO(),
+            store: receipt.store,
+            total: receipt.total || calcTotal,
+            memo: "",
+            items,
+          });
         }
         switchScreen("dashboard");
-        showToast("購入記録を保存しました");
-      } catch (e) { console.error(e); alert("保存に失敗しました。"); }
+        showToast(`${receipts.length}件のレシートを保存しました`);
+      } catch (e) {
+        console.error(e);
+        alert("保存に失敗しました。");
+        btn.disabled = false;
+        label.textContent = `${receipts.length}件を保存する`;
+      }
     }
 
     // ===== FEAT-002: CSV エクスポート =====
@@ -2433,11 +2416,16 @@
         div.style.animationDelay = (i * CONFIG.STAGGER_DELAY_S) + "s";
         const cycle = calcPurchaseCycle(p.id);
         const cycleHtml = cycle ? `<span class="cycle-badge${cycle.daysSinceLast >= cycle.avgDays ? ' due' : ''}">🔔 平均${cycle.avgDays}日毎（前回から${cycle.daysSinceLast}日）</span>` : "";
+        const spEntries = Object.entries(p.storePrices || {}).sort((a, b) => a[1].price - b[1].price);
+        const cheapest = spEntries[0];
+        const priceHtml = cheapest
+          ? ` · 最安 ¥${cheapest[1].price.toLocaleString()}（${escapeHTML(cheapest[0])}）`
+          : p.price ? ` · ¥${p.price.toLocaleString()}` : "";
         const placesHtml = (p.places||[]).map(pl => `<span class="summary-tag" style="font-size:0.68rem;">🏪 ${escapeHTML(pl)}</span>`).join("");
         div.innerHTML = `
           <div class="product-item-info">
             <span class="product-item-name">${escapeHTML(p.name)}</span>
-            <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}${p.price ? " · 参考 ¥" + p.price.toLocaleString() : ""}</span>
+            <span class="product-item-meta">${escapeHTML(p.category||"")}${p.note ? " · " + escapeHTML(p.note) : ""}${priceHtml}</span>
             ${placesHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">${placesHtml}</div>` : ""}
             ${cycleHtml}
           </div>
@@ -2563,17 +2551,14 @@
         await savePurchaseToFirestore(data);
         for (const item of items) {
           if (item.productId) {
-            const prod = products.find(p => p.id === item.productId);
-            const cur = prod?.places || [];
-            const upd = { price: item.price };
-            if (!cur.includes(store)) upd.places = [...cur, store];
-            await updateDoc(doc(productsCollectionRef, item.productId), upd);
+            await updateProductStorePrice(item.productId, store, item.price, date);
           } else if (item.name && item.name !== "不明") {
             await addDoc(productsCollectionRef, {
               name: item.name,
               category: item.category || "食品・食事",
               note: "",
               price: item.price,
+              storePrices: { [store]: { price: item.price, date } },
               places: [store],
               createdAt: serverTimestamp(),
             });
@@ -2607,23 +2592,11 @@
       const el = document.getElementById("priceCompareResult");
       if (!el) return;
       if (!productId) { el.innerHTML = ""; return; }
-      const storeMap = {};
-      for (const p of purchases) {
-        for (const item of (p.items || [])) {
-          if (item.productId !== productId) continue;
-          const s = p.store;
-          if (!storeMap[s]) storeMap[s] = { prices: [], dates: [] };
-          storeMap[s].prices.push(item.price);
-          storeMap[s].dates.push(p.date);
-        }
-      }
-      const stores = Object.entries(storeMap).map(([store, v]) => {
-        const min = Math.min(...v.prices);
-        const avg = v.prices.reduce((a,b)=>a+b,0)/v.prices.length;
-        const latest = v.prices[v.prices.length-1];
-        const trend = calcPriceTrend(v.dates.map((d,i) => ({ date:d, price:v.prices[i] })));
-        return { store, min, avg, latest, count: v.prices.length, trend };
-      }).sort((a,b) => a.min - b.min);
+      const product = products.find(p => p.id === productId);
+      const storePrices = product?.storePrices || {};
+      const stores = Object.entries(storePrices)
+        .map(([store, v]) => ({ store, price: v.price, date: v.date }))
+        .sort((a, b) => a.price - b.price);
 
       if (stores.length === 0) {
         el.innerHTML = '<div class="chart-placeholder">この商品の購入履歴がまだありません。</div>';
@@ -2635,20 +2608,13 @@
         const isDue = cycle.daysSinceLast >= cycle.avgDays;
         cycleHtml = `<div class="cycle-badge${isDue ? ' due' : ''}" style="margin-bottom:10px;">🔔 購買周期：平均 <strong>${cycle.avgDays}日</strong> ごと（前回から <strong>${cycle.daysSinceLast}日</strong> 経過${isDue ? " ⚠️ 補充時期かも" : ""}）</div>`;
       }
-      const refProduct = products.find(p => p.id === productId);
-      let refPriceHtml = "";
-      if (refProduct?.price && stores.length > 0) {
-        const diff = refProduct.price - stores[0].min;
-        const diffStr = diff > 0 ? `参考より ¥${diff} 高い` : diff < 0 ? `参考より ¥${Math.abs(diff)} 安い` : "参考価格と同額";
-        refPriceHtml = `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px;">📋 参考価格（マスタ）: <strong>¥${refProduct.price.toLocaleString()}</strong> → 最安店は${diffStr}</div>`;
-      }
-      const rankSymbols = ['🥇','🥈','🥉'];
+      const rankSymbols = ["🥇","🥈","🥉"];
       const rows = stores.map((s, i) => {
         const rank = i < 3 ? rankSymbols[i] : `${i+1}位`;
-        const trendStr = s.trend !== null ? (s.trend > 0 ? `<span class="trend-up">↑ +¥${Math.abs(s.trend).toFixed(0)}/回</span>` : s.trend < 0 ? `<span class="trend-down">↓ -¥${Math.abs(s.trend).toFixed(0)}/回</span>` : "") : "";
-        return `<tr${i===0?' class="cheapest"':''}><td class="rank-col">${rank}</td><td>${escapeHTML(s.store)}</td><td>${formatCurrencyYen(s.min)}</td><td>${formatCurrencyYen(Math.round(s.avg))}</td><td>${formatCurrencyYen(s.latest)} ${trendStr}</td><td>${s.count}回</td></tr>`;
+        const dateStr = s.date ? `<span style="font-size:0.68rem;color:var(--text-muted)">${s.date}</span>` : "";
+        return `<tr${i===0?' class="cheapest"':''}><td class="rank-col">${rank}</td><td>${escapeHTML(s.store)}</td><td>${formatCurrencyYen(s.price)}</td><td>${dateStr}</td></tr>`;
       }).join("");
-      el.innerHTML = `${cycleHtml}${refPriceHtml}<table class="price-table"><thead><tr><th></th><th>店名</th><th>最安値</th><th>平均</th><th>最新価格</th><th>回数</th></tr></thead><tbody>${rows}</tbody></table>`;
+      el.innerHTML = `${cycleHtml}<table class="price-table"><thead><tr><th></th><th>店名</th><th>価格</th><th>最終購入</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
 
     // ===== ML 分析関数 =====
@@ -2679,9 +2645,10 @@
     function calcSavingOpportunity() {
       const todayMonth = getMonthKey(todayISO());
       const minPrices = {};
-      for (const p of purchases) {
-        for (const item of (p.items||[])) {
-          if (!minPrices[item.productId] || item.price < minPrices[item.productId]) minPrices[item.productId] = item.price;
+      for (const prod of products) {
+        if (prod.storePrices) {
+          const vals = Object.values(prod.storePrices).map(v => v.price);
+          if (vals.length) minPrices[prod.id] = Math.min(...vals);
         }
       }
       let totalSaving = 0;
@@ -3041,57 +3008,48 @@
       document.getElementById("priceProductSelect").addEventListener("change", (e) => renderPriceCompareResult(e.target.value));
       // PDF読み込みOCR
       document.getElementById("goOcrBtn").addEventListener("click", () => {
-        document.getElementById("ocrDate").value = todayISO();
-        document.getElementById("ocrStore").value = "";
-        document.getElementById("ocrMemo").value = "";
-        document.getElementById("ocrFileName").textContent = "";
-        document.getElementById("ocrStep2").style.display = "none";
-        document.getElementById("ocrStep3").style.display = "none";
-        document.getElementById("ocrSaveArea").style.display = "none";
-        document.getElementById("ocrDraftContainer").innerHTML = "";
-        document.getElementById("ocrTotalDisplay").textContent = "¥0";
+        document.getElementById("ocrFileNameLabel").textContent = "PDFを選択する";
+        document.getElementById("ocrPdfInput").value = "";
+        document.getElementById("ocrReceiptList").style.display = "none";
+        document.getElementById("ocrReceiptList").innerHTML = "";
+        document.getElementById("ocrBatchSaveArea").style.display = "none";
+        document.getElementById("ocrProgress").style.display = "none";
+        editingPurchaseId = null;
         switchScreen("ocr");
       });
       document.getElementById("ocrBackBtn").addEventListener("click", () => switchScreen("dashboard"));
-      document.getElementById("ocrCancelBtn").addEventListener("click", () => switchScreen("dashboard"));
-      document.getElementById("ocrAddRowBtn").addEventListener("click", () => {
-        document.getElementById("ocrDraftContainer").appendChild(renderOcrDraftRow());
-        recalcOcrTotal();
-      });
-      document.getElementById("ocrSaveBtn").addEventListener("click", handleOcrSave);
-      document.getElementById("ocrPdfInput").addEventListener("change", (e) => {
+      document.getElementById("ocrPdfInput").addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        document.getElementById("ocrFileName").textContent = `📄 ${file.name}`;
-        document.getElementById("ocrStep2").style.display = "block";
-        document.getElementById("ocrRunBtn")._file = file;
-      });
-      document.getElementById("ocrRunBtn").addEventListener("click", async () => {
-        const file = document.getElementById("ocrRunBtn")._file;
-        if (!file) return;
+        document.getElementById("ocrFileNameLabel").textContent = file.name;
+        document.getElementById("ocrReceiptList").style.display = "none";
+        document.getElementById("ocrBatchSaveArea").style.display = "none";
         document.getElementById("ocrProgress").style.display = "block";
-        document.getElementById("ocrRunBtn").disabled = true;
         try {
           const text = await extractTextFromPdf(file);
-          const items = parseReceiptText(text);
-          document.getElementById("ocrStep3").style.display = "block";
-          document.getElementById("ocrSaveArea").style.display = "flex";
-          const container = document.getElementById("ocrDraftContainer");
-          container.innerHTML = "";
-          if (items.length === 0) {
-            container.innerHTML = '<div class="chart-placeholder">商品行が検出されませんでした。手動で「＋ 行を追加」してください。</div>';
+          const receipts = parseMultipleReceipts(text);
+          const listEl = document.getElementById("ocrReceiptList");
+          listEl.innerHTML = "";
+          if (receipts.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;">レシートが検出されませんでした</div>';
           } else {
-            items.forEach(item => container.appendChild(renderOcrDraftRow(item)));
-            showToast(`${items.length}件の商品を検出しました`);
+            receipts.forEach(r => listEl.appendChild(renderOcrReceiptCard(r)));
+            document.getElementById("ocrBatchSaveLabel").textContent = `${receipts.length}件を保存する`;
+            document.getElementById("ocrBatchSaveBtn")._receipts = receipts;
+            document.getElementById("ocrBatchSaveArea").style.display = "block";
           }
-          recalcOcrTotal();
+          listEl.style.display = "block";
+          if (receipts.length > 0) showToast(`${receipts.length}件のレシートを検出しました`);
         } catch (err) {
           console.error(err);
-          alert("PDF解析に失敗しました。vFlat ScanでOCRしたテキスト層付きPDFか確認してください。");
+          alert("PDF解析に失敗しました。");
         } finally {
           document.getElementById("ocrProgress").style.display = "none";
-          document.getElementById("ocrRunBtn").disabled = false;
         }
+      });
+      document.getElementById("ocrBatchSaveBtn").addEventListener("click", () => {
+        const receipts = document.getElementById("ocrBatchSaveBtn")._receipts;
+        if (receipts) handleOcrSaveBatch(receipts);
       });
     }
 
