@@ -824,15 +824,6 @@
     /* 節約余地カード */
     .saving-insight{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.25);font-size:0.8rem;}
     .saving-insight strong{color:#4ade80;}
-    /* === OCRレシートカード === */
-    .ocr-receipt-card{border:1px solid var(--border-subtle);border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(15,23,42,0.6);}
-    .ocr-receipt-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
-    .ocr-receipt-store{font-weight:600;font-size:0.9rem;}
-    .ocr-receipt-date{font-size:0.75rem;color:var(--text-muted);margin-top:2px;}
-    .ocr-receipt-total{font-size:1rem;font-weight:700;color:var(--accent);}
-    .ocr-receipt-count{font-size:0.75rem;color:var(--text-muted);}
-    .ocr-receipt-items{border-top:1px dashed var(--border-subtle);padding-top:8px;}
-    .ocr-receipt-item-row{display:flex;justify-content:space-between;font-size:0.78rem;padding:2px 0;color:var(--text-muted);}
     /* === レスポンシブ対応 === */
 
     /* iPhone / Android セーフエリア（ノッチ・ホームバー） */
@@ -959,7 +950,6 @@
           <button class="quick-btn" id="goProductsBtn"><span class="icon">📦</span><span>商品マスタ</span></button>
           <button class="quick-btn" id="goPurchaseBtn"><span class="icon">🧾</span><span>明細で入力</span></button>
           <button class="quick-btn" id="goPriceBtn"><span class="icon">💰</span><span>価格比較</span></button>
-          <button class="quick-btn" id="goOcrBtn"><span class="icon">📄</span><span>PDF読み込み</span></button>
         </div>
 
         <div class="dashboard-grid">
@@ -1370,35 +1360,6 @@
         </div>
       </section>
 
-      <!-- Screen 7: レシートPDF読み込み -->
-      <section id="screen-ocr" class="screen">
-        <div class="card">
-          <div class="screen-header">
-            <div>
-              <div class="screen-title">レシートPDF読み込み</div>
-              <div class="screen-subtitle">PDFを選ぶと自動で全レシートを解析します</div>
-            </div>
-            <button class="btn-outline" id="ocrBackBtn"><span class="icon">←</span> 戻る</button>
-          </div>
-          <label class="btn-outline mt-4"
-                 style="cursor:pointer;width:100%;justify-content:center;min-height:52px;display:inline-flex;align-items:center;gap:8px;">
-            <span class="icon">📄</span>
-            <span id="ocrFileNameLabel">PDFを選択する</span>
-            <input type="file" id="ocrPdfInput" accept=".pdf,application/pdf" style="display:none;"/>
-          </label>
-          <div id="ocrProgress" style="display:none;text-align:center;padding:16px 0;">
-            <span class="spinner"></span>
-            <span style="margin-left:8px;font-size:0.85rem;color:var(--text-muted);">PDFを解析中...</span>
-          </div>
-          <div id="ocrReceiptList" style="display:none;" class="mt-4"></div>
-          <div id="ocrBatchSaveArea" style="display:none;" class="mt-6">
-            <button class="btn-primary" id="ocrBatchSaveBtn" style="width:100%;justify-content:center;">
-              <span class="icon">💾</span>
-              <span id="ocrBatchSaveLabel">保存する</span>
-            </button>
-          </div>
-        </div>
-      </section>
     </main>
   </div>
 
@@ -1521,7 +1482,7 @@
     }
 
     // ====== 画面切り替え ======
-    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1, ocr: 1 };
+    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1 };
 
     function switchScreen(name) {
       const prevOrder = SCREEN_ORDER[currentScreen] ?? 0;
@@ -2194,124 +2155,6 @@
       forecastEl.innerHTML = lines.join("<br><br>");
     }
 
-    // ===== PDF読み込み（レシートOCR） =====
-    let _pdfjs = null;
-
-    async function loadPdfJs() {
-      if (_pdfjs) return _pdfjs;
-      return new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
-        s.onload = () => {
-          pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
-          _pdfjs = pdfjsLib;
-          resolve(_pdfjs);
-        };
-        s.onerror = () => reject(new Error("PDF.jsの読み込みに失敗しました"));
-        document.head.appendChild(s);
-      });
-    }
-
-    async function extractTextFromPdf(file) {
-      const lib = await loadPdfJs();
-      const buf = await file.arrayBuffer();
-      const pdf = await lib.getDocument({ data: buf }).promise;
-      const allLines = [];
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const content = await page.getTextContent();
-        const lineMap = {};
-        for (const item of content.items) {
-          if (!item.str?.trim()) continue;
-          const y = Math.round(item.transform[5]);
-          if (!lineMap[y]) lineMap[y] = [];
-          lineMap[y].push({ x: item.transform[4], str: item.str });
-        }
-        Object.keys(lineMap).map(Number).sort((a, b) => b - a).forEach(y => {
-          const line = lineMap[y].sort((a, b) => a.x - b.x).map(t => t.str).join("");
-          if (line.trim()) allLines.push(line.trim());
-        });
-      }
-      return allLines.join("\n");
-    }
-
-    function findMatchingProduct(rawName) {
-      const norm = s => s.replace(/[\s　]+/g, "").replace(/[（(][^）)]*[）)]/g, "");
-      const n = norm(rawName);
-      if (n.length < 1) return null;
-      return products.find(p => norm(p.name) === n)
-          || products.find(p => { const pn = norm(p.name); return pn.length >= 2 && (n.includes(pn) || pn.includes(n)); })
-          || null;
-    }
-
-    function parseMultipleReceipts(text) {
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-      const receipts = [];
-      let current = null;
-      let prevLine = "";
-      const dateRe = /(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})日?/;
-      const totalRe = /(?:合計|税込総額|小計)[^\d]*([\d,]+)/;
-      const skipRe = /^(?:合計|小計|税|お釣り|釣り銭|ポイント|レシート|領収|割引|値引|円引|OFF|会員|クーポン|おつり|商品名|数量|金額)/;
-      const discountRe = /--[¥￥]|値引|割引|OFF/i;
-      const itemRe = /^(.+?)\s+(\d+)\s+[¥￥]?([\d,]+)\s*$/;
-      const itemRe2 = /^(.+?)([\d,]{2,7})\s*$/;
-      for (const line of lines) {
-        const dm = line.match(dateRe);
-        if (dm) {
-          const dateStr = `${dm[1]}-${String(dm[2]).padStart(2,"0")}-${String(dm[3]).padStart(2,"0")}`;
-          const storePart = line.replace(dateRe, "").replace(/^【\d+】/, "").trim();
-          const store = storePart || prevLine;
-          current = { store, date: dateStr, total: 0, items: [] };
-          receipts.push(current);
-          prevLine = "";
-          continue;
-        }
-        if (!current) { prevLine = line; continue; }
-        const tm = line.match(totalRe);
-        if (tm) { current.total = parseInt(tm[1].replace(/,/g, "")); continue; }
-        if (skipRe.test(line) || discountRe.test(line)) continue;
-        const im = line.match(itemRe);
-        if (im) {
-          const price = parseInt(im[3].replace(/,/g, ""));
-          const qty = parseInt(im[2]) || 1;
-          if (price >= 10 && price <= 100000) { current.items.push({ rawName: im[1].trim(), price, qty }); continue; }
-        }
-        const im2 = line.match(itemRe2);
-        if (im2) {
-          const price = parseInt(im2[2].replace(/,/g, ""));
-          const rawName = im2[1].trim();
-          if (price >= 10 && price <= 100000 && rawName.length >= 2) { current.items.push({ rawName, price, qty: 1 }); continue; }
-        }
-        prevLine = line;
-      }
-      return receipts.filter(r => r.items.length > 0);
-    }
-
-    function renderOcrReceiptCard(receipt) {
-      const card = document.createElement("div");
-      card.className = "ocr-receipt-card";
-      const itemsHtml = receipt.items.map(it =>
-        `<div class="ocr-receipt-item-row">
-           <span>${escapeHTML(it.rawName)}${it.qty > 1 ? " × " + it.qty : ""}</span>
-           <span>${formatCurrencyYen(it.price * it.qty)}</span>
-         </div>`
-      ).join("");
-      card.innerHTML = `
-        <div class="ocr-receipt-card-header">
-          <div>
-            <div class="ocr-receipt-store">${escapeHTML(receipt.store)}</div>
-            <div class="ocr-receipt-date">${receipt.date}</div>
-          </div>
-          <div style="text-align:right;">
-            <div class="ocr-receipt-total">${formatCurrencyYen(receipt.total)}</div>
-            <div class="ocr-receipt-count">${receipt.items.length}品</div>
-          </div>
-        </div>
-        <div class="ocr-receipt-items">${itemsHtml}</div>`;
-      return card;
-    }
-
     async function updateProductStorePrice(productId, store, price, date) {
       const prod = products.find(p => p.id === productId);
       if (!prod) return;
@@ -2322,55 +2165,6 @@
       const curPlaces = prod.places || [];
       if (!curPlaces.includes(store)) upd.places = [...curPlaces, store];
       await updateDoc(doc(productsCollectionRef, productId), upd);
-    }
-
-    async function handleOcrSaveBatch(receipts) {
-      const btn = document.getElementById("ocrBatchSaveBtn");
-      const label = document.getElementById("ocrBatchSaveLabel");
-      btn.disabled = true;
-      label.textContent = "保存中...";
-      try {
-        for (const receipt of receipts) {
-          const items = [];
-          let calcTotal = 0;
-          for (const raw of receipt.items) {
-            const matched = findMatchingProduct(raw.rawName);
-            let productId = matched?.id || "";
-            if (!matched) {
-              try {
-                const ref = await addDoc(productsCollectionRef, {
-                  name: raw.rawName, category: "食品・食事", note: "",
-                  price: raw.price,
-                  storePrices: { [receipt.store]: { price: raw.price, date: receipt.date } },
-                  places: [receipt.store], createdAt: serverTimestamp(),
-                });
-                productId = ref.id;
-              } catch (e) { console.warn("商品マスタ登録失敗:", raw.rawName); }
-            } else {
-              try { await updateProductStorePrice(matched.id, receipt.store, raw.price, receipt.date); }
-              catch (e) { console.warn("商品マスタ更新失敗:", matched.name); }
-            }
-            const name = matched?.name || raw.rawName;
-            const category = matched?.category || "食品・食事";
-            items.push({ productId, name, price: raw.price, qty: raw.qty, category });
-            calcTotal += raw.price * raw.qty;
-          }
-          await savePurchaseToFirestore({
-            date: receipt.date || todayISO(),
-            store: receipt.store,
-            total: receipt.total || calcTotal,
-            memo: "",
-            items,
-          });
-        }
-        switchScreen("dashboard");
-        showToast(`${receipts.length}件のレシートを保存しました`);
-      } catch (e) {
-        console.error(e);
-        alert("保存に失敗しました。");
-        btn.disabled = false;
-        label.textContent = `${receipts.length}件を保存する`;
-      }
     }
 
     // ===== FEAT-002: CSV エクスポート =====
@@ -3006,51 +2800,6 @@
       // 価格比較
       document.getElementById("priceBackBtn").addEventListener("click", () => switchScreen("dashboard"));
       document.getElementById("priceProductSelect").addEventListener("change", (e) => renderPriceCompareResult(e.target.value));
-      // PDF読み込みOCR
-      document.getElementById("goOcrBtn").addEventListener("click", () => {
-        document.getElementById("ocrFileNameLabel").textContent = "PDFを選択する";
-        document.getElementById("ocrPdfInput").value = "";
-        document.getElementById("ocrReceiptList").style.display = "none";
-        document.getElementById("ocrReceiptList").innerHTML = "";
-        document.getElementById("ocrBatchSaveArea").style.display = "none";
-        document.getElementById("ocrProgress").style.display = "none";
-        editingPurchaseId = null;
-        switchScreen("ocr");
-      });
-      document.getElementById("ocrBackBtn").addEventListener("click", () => switchScreen("dashboard"));
-      document.getElementById("ocrPdfInput").addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        document.getElementById("ocrFileNameLabel").textContent = file.name;
-        document.getElementById("ocrReceiptList").style.display = "none";
-        document.getElementById("ocrBatchSaveArea").style.display = "none";
-        document.getElementById("ocrProgress").style.display = "block";
-        try {
-          const text = await extractTextFromPdf(file);
-          const receipts = parseMultipleReceipts(text);
-          const listEl = document.getElementById("ocrReceiptList");
-          listEl.innerHTML = "";
-          if (receipts.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;">レシートが検出されませんでした</div>';
-          } else {
-            receipts.forEach(r => listEl.appendChild(renderOcrReceiptCard(r)));
-            document.getElementById("ocrBatchSaveLabel").textContent = `${receipts.length}件を保存する`;
-            document.getElementById("ocrBatchSaveBtn")._receipts = receipts;
-            document.getElementById("ocrBatchSaveArea").style.display = "block";
-          }
-          listEl.style.display = "block";
-          if (receipts.length > 0) showToast(`${receipts.length}件のレシートを検出しました`);
-        } catch (err) {
-          console.error(err);
-          alert("PDF解析に失敗しました。");
-        } finally {
-          document.getElementById("ocrProgress").style.display = "none";
-        }
-      });
-      document.getElementById("ocrBatchSaveBtn").addEventListener("click", () => {
-        const receipts = document.getElementById("ocrBatchSaveBtn")._receipts;
-        if (receipts) handleOcrSaveBatch(receipts);
-      });
     }
 
     function init() {
