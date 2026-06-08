@@ -865,6 +865,31 @@
       #signOutBtn .icon { font-size: 1.2rem; }
     }
 
+    /* ─── スマホ向けフローティングホームボタン ─── */
+    #fabHome {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      z-index: 100;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      font-size: 1.4rem;
+      box-shadow: 0 4px 18px rgba(56,189,248,0.45);
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
+    }
+    #fabHome:active { transform: scale(0.92); }
+    @media (max-width: 640px) {
+      #fabHome { display: flex; }
+    }
+
     /* ─── カード・余白：極小画面（390px 以下） ─── */
     @media (max-width: 390px) {
       .app { padding: 10px; gap: 10px; }
@@ -1361,6 +1386,9 @@
       </section>
 
     </main>
+
+    <!-- スマホ向けフローティングホームボタン -->
+    <button id="fabHome" aria-label="ホームへ戻る">🏠</button>
   </div>
 
   <!-- Firebase + アプリ本体 -->
@@ -1379,7 +1407,7 @@
       orderBy,
       serverTimestamp,
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, browserLocalPersistence, setPersistence }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     // ★ あなたの Firebase 設定
@@ -1396,6 +1424,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
     const googleProvider = new GoogleAuthProvider();
 
     // ★ 家族ごとのID：ここを家族で同じ文字列にすれば共有されます
@@ -1497,6 +1526,9 @@
         target.classList.add("active", animClass);
         target.addEventListener("animationend", () => target.classList.remove(animClass), { once: true });
       }
+      const fab = document.getElementById("fabHome");
+      if (fab) fab.style.opacity = name === "dashboard" ? "0" : "1";
+      if (fab) fab.style.pointerEvents = name === "dashboard" ? "none" : "auto";
     }
 
     // ====== 集計 ======
@@ -1630,8 +1662,7 @@
       const summaryCategoryTagsEl = document.getElementById("summary-category-tags");
 
       const todayMonth = getMonthKey(todayISO());
-      const monthEntries = entries.filter((e) => getMonthKey(e.date) === todayMonth);
-      const total = monthEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const total = getMonthTotals()[todayMonth] || 0;
 
       countUp(headerTotalEl, total);
       countUp(summaryTotalEl, total);
@@ -2664,12 +2695,20 @@
 
     // ===== 初期化 =====
     function initAuthHandlers() {
+      // PWAスタンドアロンモードではリダイレクト結果を処理
+      getRedirectResult(auth).catch(() => {});
+
       document.getElementById("googleSignInBtn").addEventListener("click", async () => {
         const btn = document.getElementById("googleSignInBtn");
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span>&nbsp;サインイン中…';
+        const isPWA = window.matchMedia("(display-mode: standalone)").matches || !!window.navigator.standalone;
         try {
-          await signInWithPopup(auth, googleProvider);
+          if (isPWA) {
+            await signInWithRedirect(auth, googleProvider);
+          } else {
+            await signInWithPopup(auth, googleProvider);
+          }
         } catch (e) {
           document.getElementById("authError").textContent =
             "ログインに失敗しました。ポップアップが閉じられたか接続を確認してください。";
@@ -2716,6 +2755,9 @@
 
     function initNavigationHandlers() {
       document.getElementById("goDashboardBtn").addEventListener("click", () => {
+        switchScreen("dashboard");
+      });
+      document.getElementById("fabHome").addEventListener("click", () => {
         switchScreen("dashboard");
       });
       document.getElementById("newEntryBtn").addEventListener("click", () => {
