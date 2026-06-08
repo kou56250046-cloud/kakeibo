@@ -1518,7 +1518,7 @@
     }
 
     // ====== 画面切り替え ======
-    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, "price-compare": 1 };
+    const SCREEN_ORDER = { dashboard: 0, category: 1, entry: 2, products: 1, purchase: 1, price: 1 };
 
     function switchScreen(name) {
       const prevOrder = SCREEN_ORDER[currentScreen] ?? 0;
@@ -2926,7 +2926,7 @@
       // クイックアクション
       document.getElementById("goProductsBtn").addEventListener("click", () => switchScreen("products"));
       document.getElementById("goPurchaseBtn").addEventListener("click", () => { initPurchaseForm(); switchScreen("purchase"); });
-      document.getElementById("goPriceBtn").addEventListener("click", () => { renderPriceCompareProductOptions(); switchScreen("price-compare"); });
+      document.getElementById("goPriceBtn").addEventListener("click", () => { renderPriceCompareProductOptions(); switchScreen("price"); });
     }
 
     function initEntryHandlers() {
