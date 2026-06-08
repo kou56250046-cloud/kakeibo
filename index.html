@@ -806,11 +806,12 @@
     .product-item-meta{font-size:0.73rem;color:var(--text-muted);}
     .product-item-actions{display:flex;gap:6px;flex-shrink:0;}
     /* 明細購入記録 */
-    .purchase-item-row{display:grid;grid-template-columns:1fr 80px 58px 32px;gap:6px;margin-bottom:6px;align-items:center;}
+    .purchase-item-row{display:grid;grid-template-columns:1fr 90px 72px 52px 30px;gap:5px;margin-bottom:6px;align-items:center;}
     .purchase-item-row select,.purchase-item-row input{font-size:0.8rem;}
+    .item-category{padding:4px 2px;font-size:0.72rem!important;}
     .product-input-wrapper{display:flex;flex-direction:column;gap:4px;}
     .product-input-wrapper select,.product-input-wrapper input[type="text"]{font-size:0.8rem;width:100%;}
-    @media(max-width:480px){.purchase-item-row{grid-template-columns:1fr 68px 48px 28px;gap:4px;}}
+    @media(max-width:480px){.purchase-item-row{grid-template-columns:1fr 72px 62px 44px 26px;gap:3px;}.item-category{font-size:0.68rem!important;padding:3px 1px;}}
     /* 価格比較テーブル */
     .price-table{width:100%;border-collapse:collapse;font-size:0.8rem;margin-top:6px;}
     .price-table th{text-align:left;padding:5px 8px;font-size:0.72rem;color:var(--text-muted);border-bottom:1px solid var(--border-subtle);}
@@ -1352,7 +1353,7 @@
             </div>
             <!-- 列ヘッダー -->
             <div class="purchase-item-row" style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">
-              <span>商品名（入力または候補から選択）</span><span>価格(¥)</span><span>数量</span><span></span>
+              <span>商品名</span><span>用途</span><span>価格(¥)</span><span>数量</span><span></span>
             </div>
             <datalist id="purchase-products-datalist"></datalist>
             <div id="purchaseItemsContainer"></div>
@@ -1920,7 +1921,7 @@
         spendingChart = null;
       }
 
-      if (entries.length === 0) {
+      if (entries.length === 0 && purchases.length === 0) {
         ctx.canvas.style.display = "none";
         placeholder.style.display = "block";
         return;
@@ -1935,12 +1936,7 @@
 
       if (dimension === "category") {
         const todayMonth = getMonthKey(todayISO());
-        const monthEntries = entries.filter((e) => getMonthKey(e.date) === todayMonth);
-        const categoryTotals = {};
-        for (const e of monthEntries) {
-          const key = e.category || "未分類";
-          categoryTotals[key] = (categoryTotals[key] || 0) + (e.amount || 0);
-        }
+        const categoryTotals = getMonthCategoryTotals(todayMonth);
         labels = Object.keys(categoryTotals);
         data = labels.map((l) => categoryTotals[l]);
         titleText = `${formatMonthLabel(todayMonth)} 用途別支出`;
@@ -2367,19 +2363,38 @@
       dl.innerHTML = products.map(p => `<option value="${escapeHTML(p.name)}"></option>`).join("");
     }
 
+    const CATEGORIES = ["食品・食事","日用品","ベイビーグッズ","病院・お薬","書籍","その他"];
+
+    function makeCategoryOptions(selected) {
+      return CATEGORIES.map(c =>
+        `<option value="${c}"${c === selected ? " selected" : ""}>${c}</option>`
+      ).join("");
+    }
+
     function addPurchaseItemRow(item = null) {
       const container = document.getElementById("purchaseItemsContainer");
       const row = document.createElement("div");
       row.className = "purchase-item-row";
+      const defaultCat = item?.category || "食品・食事";
       row.innerHTML = `
         <input type="text" class="input-base product-name-input" list="purchase-products-datalist"
                placeholder="商品名を入力または選択" autocomplete="off" value="${item ? escapeHTML(item.name) : ""}"/>
+        <select class="input-base item-category">${makeCategoryOptions(defaultCat)}</select>
         <input type="number" class="input-base item-price" placeholder="0" min="0" inputmode="decimal" value="${item ? item.price : ""}"/>
         <input type="number" class="input-base item-qty" placeholder="1" min="1" value="${item ? item.qty : 1}" inputmode="decimal"/>
         <button class="btn-danger item-remove-btn" style="padding:4px 6px;min-height:0;">✕</button>`;
-      row.querySelector(".item-price").addEventListener("input", recalcPurchaseTotal);
+      const nameInput = row.querySelector(".item-price");
+      nameInput.addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-qty").addEventListener("input", recalcPurchaseTotal);
       row.querySelector(".item-remove-btn").addEventListener("click", () => { row.remove(); recalcPurchaseTotal(); });
+      // 商品名確定時に商品マスタからカテゴリを自動設定
+      const productNameInput = row.querySelector(".product-name-input");
+      const catSelect = row.querySelector(".item-category");
+      productNameInput.addEventListener("change", () => {
+        const normName = s => s.replace(/[\s　]+/g, "").toLowerCase();
+        const matched = products.find(p => normName(p.name) === normName(productNameInput.value.trim()));
+        if (matched?.category) catSelect.value = matched.category;
+      });
       container.appendChild(row);
       if (item) recalcPurchaseTotal();
     }
@@ -2460,12 +2475,14 @@
         const qty = parseFloat(row.querySelector(".item-qty").value) || 1;
         if (price === 0) continue;
         const matched = products.find(p => normName(p.name) === normName(inputName));
+        const catSelect = row.querySelector(".item-category");
+        const category = catSelect ? catSelect.value : (matched ? matched.category : "食品・食事");
         items.push({
           productId: matched ? matched.id : "",
           name: matched ? matched.name : inputName,
           price,
           qty,
-          category: matched ? matched.category : "食品・食事",
+          category,
         });
         total += price * qty;
       }
@@ -2522,27 +2539,16 @@
       const cur = sel.value;
       sel.innerHTML = '<option value="">商品を選択してください</option>';
 
-      // 購入実績のあるproductIdだけ抽出
-      const usedIds = new Set();
-      for (const purchase of purchases) {
-        for (const item of (purchase.items || [])) {
-          if (item.productId) usedIds.add(item.productId);
-        }
-      }
+      // 商品マスタ全体を表示（価格データがなくてもリストに出す）
+      products.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        if (p.id === cur) opt.selected = true;
+        sel.appendChild(opt);
+      });
 
-      products
-        .filter(p => usedIds.has(p.id))
-        .forEach(p => {
-          const opt = document.createElement("option");
-          opt.value = p.id;
-          opt.textContent = p.name;
-          if (p.id === cur) opt.selected = true;
-          sel.appendChild(opt);
-        });
-
-      if (!sel.querySelector(`option[value="${cur}"]`)) {
-        sel.value = "";
-      }
+      if (!sel.querySelector(`option[value="${cur}"]`)) sel.value = "";
       if (sel.value) renderPriceCompareResult(sel.value);
       else document.getElementById("priceCompareResult").innerHTML = "";
     }
@@ -2552,14 +2558,23 @@
       if (!el) return;
       if (!productId) { el.innerHTML = ""; return; }
 
-      // purchasesから直接集計（storePrices依存を排除）
-      const storeMap = buildStorePriceMap()[productId] || {};
+      // purchasesから集計した価格マップ
+      const storeMap = { ...(buildStorePriceMap()[productId] || {}) };
+
+      // 商品マスタのstorePricesも統合（purchases未収録の店舗データを補完）
+      const product = products.find(p => p.id === productId);
+      for (const [store, v] of Object.entries(product?.storePrices || {})) {
+        if (!storeMap[store] || v.price < storeMap[store].price) {
+          storeMap[store] = { price: v.price, date: v.date || "" };
+        }
+      }
+
       const stores = Object.entries(storeMap)
         .map(([store, v]) => ({ store, price: v.price, date: v.date }))
         .sort((a, b) => a.price - b.price);
 
       if (stores.length === 0) {
-        el.innerHTML = '<div class="chart-placeholder">この商品の購入履歴がまだありません。</div>';
+        el.innerHTML = '<div class="chart-placeholder">この商品の価格データがまだありません。<br>明細入力で購入記録を追加すると比較できます。</div>';
         return;
       }
       const cycle = calcPurchaseCycle(productId);
