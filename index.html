@@ -1357,8 +1357,13 @@
             <datalist id="purchase-products-datalist"></datalist>
             <div id="purchaseItemsContainer"></div>
           </div>
-          <div style="text-align:right;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);font-size:1rem;font-weight:700;">
-            合計：<span id="purchaseTotalDisplay">¥0</span>
+          <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle);">
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
+              <button id="addTax8Btn" class="btn-outline" style="font-size:0.72rem;padding:3px 9px;min-height:30px;">+税8%</button>
+              <button id="addTax10Btn" class="btn-outline" style="font-size:0.72rem;padding:3px 9px;min-height:30px;">+税10%</button>
+              <span style="font-size:1rem;font-weight:700;">合計：<span id="purchaseTotalDisplay">¥0</span></span>
+            </div>
+            <div id="purchaseTaxNote" style="font-size:0.72rem;color:var(--text-muted);text-align:right;margin-top:2px;"></div>
           </div>
           <div class="form-actions mt-6">
             <button class="btn-outline" id="purchaseCancelBtn">キャンセル</button>
@@ -1450,6 +1455,7 @@
     let editingId = null;
     let editingProductId = null;
     let editingPurchaseId = null;
+    let currentTaxRate = 0;
     let purchaseItemRows = [];
     let selectedCategory = null;
     let selectedCategoryLabel = null;
@@ -1687,7 +1693,10 @@
     }
 
     function buildMonthOptions() {
-      const monthSet = new Set(entries.map((e) => getMonthKey(e.date)));
+      const monthSet = new Set([
+        ...entries.map(e => getMonthKey(e.date)),
+        ...purchases.map(p => getMonthKey(p.date)),
+      ]);
       monthSet.delete("");
       const sortedMonths = Array.from(monthSet).sort().reverse();
 
@@ -1707,7 +1716,10 @@
     }
 
     function buildCategoryOptions() {
-      const categorySet = new Set(entries.map((e) => e.category || "未分類"));
+      const categorySet = new Set([
+        ...entries.map(e => e.category || "未分類"),
+        ...purchases.flatMap(p => (p.items || []).map(item => item.category || "未分類")),
+      ]);
       const sorted = Array.from(categorySet).sort();
       const historyCategoryFilter = document.getElementById("historyCategoryFilter");
       historyCategoryFilter.innerHTML = "";
@@ -1728,24 +1740,33 @@
       const container = document.getElementById("historyList");
       container.innerHTML = "";
 
-      if (entries.length === 0) {
+      const monthFilter = document.getElementById("historyMonthFilter").value;
+      const categoryFilter = document.getElementById("historyCategoryFilter").value;
+
+      // entries と purchases を統合
+      const allItems = [
+        ...entries.map(e => ({ ...e, _type: "entry" })),
+        ...purchases.map(p => ({ ...p, _type: "purchase" })),
+      ];
+
+      if (allItems.length === 0) {
         const div = document.createElement("div");
         div.className = "chart-placeholder";
         div.style.marginTop = "4px";
-        div.innerHTML = "まだ履歴がありません。<br>今日の支出から記録してみましょう。";
+        div.innerHTML = "まだ履歴がありません。<br>明細で入力から記録してみましょう。";
         container.appendChild(div);
         return;
       }
 
-      const monthFilter = document.getElementById("historyMonthFilter").value;
-      const categoryFilter = document.getElementById("historyCategoryFilter").value;
-
-      let filtered = entries.slice();
+      let filtered = allItems.slice();
       if (monthFilter !== "all") {
-        filtered = filtered.filter((e) => getMonthKey(e.date) === monthFilter);
+        filtered = filtered.filter(e => getMonthKey(e.date) === monthFilter);
       }
       if (categoryFilter !== "all") {
-        filtered = filtered.filter((e) => e.category === categoryFilter);
+        filtered = filtered.filter(e => {
+          if (e._type === "entry") return e.category === categoryFilter;
+          return (e.items || []).some(item => item.category === categoryFilter);
+        });
       }
 
       filtered.sort((a, b) => {
@@ -1755,11 +1776,13 @@
         return dA > dB ? -1 : 1;
       });
 
-      // FEAT-003: フィルター適用中の合計表示
+      // フィルター適用中の合計表示
       const summaryEl = document.getElementById("historyFilterSummary");
       if (summaryEl) {
         if (filtered.length > 0 && (monthFilter !== "all" || categoryFilter !== "all")) {
-          const filteredTotal = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+          const filteredTotal = filtered.reduce((s, e) => {
+            return s + (e._type === "entry" ? (e.amount || 0) : (e.total || 0));
+          }, 0);
           const parts = [];
           if (monthFilter !== "all") parts.push(formatMonthLabel(monthFilter));
           if (categoryFilter !== "all") parts.push(categoryFilter);
@@ -1774,8 +1797,7 @@
         const div = document.createElement("div");
         div.className = "chart-placeholder";
         div.style.marginTop = "4px";
-        div.textContent =
-          "選択された条件に一致する履歴がありません。フィルターを変更してみてください。";
+        div.textContent = "選択された条件に一致する履歴がありません。フィルターを変更してみてください。";
         container.appendChild(div);
         return;
       }
@@ -1785,44 +1807,81 @@
         const item = document.createElement("div");
         item.className = "history-item";
         item.dataset.id = e.id;
+        item.dataset.type = e._type;
         item.style.animationDelay = (_hi * CONFIG.STAGGER_DELAY_S) + "s";
         _hi++;
 
         const catChip = document.createElement("div");
         catChip.className = "history-category-chip";
-        catChip.textContent = e.category || "未分類";
 
         const main = document.createElement("div");
         main.className = "history-main";
-
         const left = document.createElement("div");
-        left.textContent = e.place || "場所未入力";
-
         const right = document.createElement("div");
         right.className = "history-amount";
-        right.textContent = formatCurrencyYen(e.amount || 0);
-
         main.appendChild(left);
         main.appendChild(right);
 
         const meta = document.createElement("div");
         meta.className = "history-meta";
-
         const dateSpan = document.createElement("span");
         dateSpan.innerHTML = '<span class="dot"></span>' + (e.date || "-");
-
         const monthSpan = document.createElement("span");
-        monthSpan.innerHTML =
-          '<span class="dot"></span>' + formatMonthLabel(getMonthKey(e.date));
-
+        monthSpan.innerHTML = '<span class="dot"></span>' + formatMonthLabel(getMonthKey(e.date));
         meta.appendChild(dateSpan);
         meta.appendChild(monthSpan);
 
-        if (e.memo) {
-          const memoDiv = document.createElement("div");
-          memoDiv.className = "history-memo";
-          memoDiv.textContent = e.memo;
-          item.appendChild(memoDiv);
+        if (e._type === "entry") {
+          catChip.textContent = e.category || "未分類";
+          left.textContent = e.place || "場所未入力";
+          right.textContent = formatCurrencyYen(e.amount || 0);
+          if (e.memo) {
+            const memoDiv = document.createElement("div");
+            memoDiv.className = "history-memo";
+            memoDiv.textContent = e.memo;
+            item.appendChild(memoDiv);
+          }
+        } else {
+          catChip.textContent = "明細購入";
+          catChip.style.background = "rgba(56,189,248,0.18)";
+          catChip.style.color = "var(--accent)";
+          left.textContent = e.store || "店名未入力";
+          right.textContent = formatCurrencyYen(e.total || 0);
+          // 明細の折りたたみ表示
+          if ((e.items || []).length > 0) {
+            const detail = document.createElement("div");
+            detail.className = "history-memo";
+            detail.style.cursor = "pointer";
+            detail.style.userSelect = "none";
+            const summary = document.createElement("span");
+            summary.textContent = `▶ 明細 ${e.items.length}品目`;
+            summary.style.fontSize = "0.75rem";
+            summary.style.color = "var(--text-muted)";
+            const detailBody = document.createElement("div");
+            detailBody.style.display = "none";
+            detailBody.style.marginTop = "4px";
+            e.items.forEach(it => {
+              const row = document.createElement("div");
+              row.style.fontSize = "0.75rem";
+              row.style.color = "var(--text-muted)";
+              row.textContent = `${escapeHTML(it.name)}：${formatCurrencyYen(it.price)} × ${it.qty}`;
+              detailBody.appendChild(row);
+            });
+            summary.addEventListener("click", () => {
+              const open = detailBody.style.display !== "none";
+              detailBody.style.display = open ? "none" : "block";
+              summary.textContent = (open ? "▶" : "▼") + ` 明細 ${e.items.length}品目`;
+            });
+            detail.appendChild(summary);
+            detail.appendChild(detailBody);
+            item.appendChild(detail);
+          }
+          if (e.memo) {
+            const memoDiv = document.createElement("div");
+            memoDiv.className = "history-memo";
+            memoDiv.textContent = e.memo;
+            item.appendChild(memoDiv);
+          }
         }
 
         item.appendChild(catChip);
@@ -1836,11 +1895,13 @@
         editBtn.className = "btn-ghost btn-edit";
         editBtn.innerHTML = "✏️ 編集";
         editBtn.dataset.id = e.id;
+        editBtn.dataset.type = e._type;
 
         const delBtn = document.createElement("button");
         delBtn.className = "btn-danger btn-delete";
         delBtn.innerHTML = "🗑 削除";
         delBtn.dataset.id = e.id;
+        delBtn.dataset.type = e._type;
 
         actions.appendChild(editBtn);
         actions.appendChild(delBtn);
@@ -2324,14 +2385,46 @@
     }
 
     function recalcPurchaseTotal() {
-      let total = 0;
+      let subtotal = 0;
       document.querySelectorAll(".purchase-item-row").forEach(row => {
         const price = parseFloat(row.querySelector(".item-price")?.value) || 0;
         const qty = parseFloat(row.querySelector(".item-qty")?.value) || 1;
-        total += price * qty;
+        subtotal += price * qty;
       });
+      const tax = Math.round(subtotal * currentTaxRate);
+      const total = subtotal + tax;
       const el = document.getElementById("purchaseTotalDisplay");
       if (el) el.textContent = formatCurrencyYen(total);
+      const noteEl = document.getElementById("purchaseTaxNote");
+      if (noteEl) {
+        noteEl.textContent = currentTaxRate > 0
+          ? `小計 ${formatCurrencyYen(subtotal)} ＋ 消費税${(currentTaxRate * 100) | 0}% ${formatCurrencyYen(tax)}`
+          : "";
+      }
+    }
+
+    function applyTax(rate) {
+      currentTaxRate = currentTaxRate === rate ? 0 : rate;
+      recalcPurchaseTotal();
+      const pct = (rate * 100) | 0;
+      document.getElementById("addTax8Btn").style.background = currentTaxRate === 0.08 ? "rgba(56,189,248,0.25)" : "";
+      document.getElementById("addTax10Btn").style.background = currentTaxRate === 0.10 ? "rgba(56,189,248,0.25)" : "";
+    }
+
+    function openEditPurchase(purchase) {
+      document.getElementById("purchaseDate").value = purchase.date || todayISO();
+      document.getElementById("purchaseStore").value = purchase.store || "";
+      document.getElementById("purchaseMemo").value = purchase.memo || "";
+      document.getElementById("purchaseItemsContainer").innerHTML = "";
+      currentTaxRate = 0;
+      document.getElementById("addTax8Btn").style.background = "";
+      document.getElementById("addTax10Btn").style.background = "";
+      const noteEl = document.getElementById("purchaseTaxNote");
+      if (noteEl) noteEl.textContent = "";
+      (purchase.items || []).forEach(item => addPurchaseItemRow(item));
+      editingPurchaseId = purchase.id;
+      document.getElementById("purchaseScreenTitle").textContent = "購入記録を編集";
+      switchScreen("purchase");
     }
 
     function initPurchaseForm() {
@@ -2340,6 +2433,12 @@
       document.getElementById("purchaseMemo").value = "";
       document.getElementById("purchaseItemsContainer").innerHTML = "";
       document.getElementById("purchaseTotalDisplay").textContent = "¥0";
+      const noteEl = document.getElementById("purchaseTaxNote");
+      if (noteEl) noteEl.textContent = "";
+      currentTaxRate = 0;
+      document.getElementById("addTax8Btn").style.background = "";
+      document.getElementById("addTax10Btn").style.background = "";
+      document.getElementById("purchaseScreenTitle").textContent = "購入記録（明細入力）";
       editingPurchaseId = null;
       addPurchaseItemRow();
     }
@@ -2371,6 +2470,7 @@
         total += price * qty;
       }
       if (items.length === 0) { alert("明細を1行以上入力してください。"); return; }
+      total = total + Math.round(total * currentTaxRate);
       const data = { date, store, total, memo: document.getElementById("purchaseMemo").value.trim(), items };
       try {
         await savePurchaseToFirestore(data);
@@ -2797,10 +2897,8 @@
         switchScreen("dashboard");
       });
       document.getElementById("newEntryBtn").addEventListener("click", () => {
-        editingId = null;
-        selectedCategory = null;
-        selectedCategoryLabel = null;
-        switchScreen("category");
+        initPurchaseForm();
+        switchScreen("purchase");
       });
       document.getElementById("historyMonthFilter").addEventListener("change", renderHistoryList);
       document.getElementById("historyCategoryFilter").addEventListener("change", renderHistoryList);
@@ -2818,16 +2916,24 @@
 
     function initEntryHandlers() {
       document.getElementById("historyList").addEventListener("click", (event) => {
-        const target = event.target;
+        const target = event.target.closest(".btn-edit, .btn-delete");
+        if (!target) return;
+        const id = target.dataset.id;
+        const type = target.dataset.type;
         if (target.classList.contains("btn-edit")) {
-          const id = target.dataset.id;
-          const entry = entries.find((e) => e.id === id);
-          if (!entry) return;
-          renderEntryFormForEdit(entry);
-          switchScreen("entry");
+          if (type === "purchase") {
+            const purchase = purchases.find(p => p.id === id);
+            if (purchase) openEditPurchase(purchase);
+          } else {
+            const entry = entries.find(e => e.id === id);
+            if (entry) { renderEntryFormForEdit(entry); switchScreen("entry"); }
+          }
         } else if (target.classList.contains("btn-delete")) {
-          const id = target.dataset.id;
-          handleDeleteEntry(id);
+          if (type === "purchase") {
+            if (confirm("この購入記録を削除しますか？")) deletePurchaseFromFirestore(id);
+          } else {
+            handleDeleteEntry(id);
+          }
         }
       });
       document.getElementById("categoryBackBtn").addEventListener("click", () => {
@@ -2875,6 +2981,8 @@
       document.getElementById("purchaseCancelBtn").addEventListener("click", () => switchScreen("dashboard"));
       document.getElementById("purchaseSaveBtn").addEventListener("click", handleSavePurchase);
       document.getElementById("addItemRowBtn").addEventListener("click", addPurchaseItemRow);
+      document.getElementById("addTax8Btn").addEventListener("click", () => applyTax(0.08));
+      document.getElementById("addTax10Btn").addEventListener("click", () => applyTax(0.10));
       // 価格比較
       document.getElementById("priceBackBtn").addEventListener("click", () => switchScreen("dashboard"));
       document.getElementById("priceProductSelect").addEventListener("change", (e) => renderPriceCompareResult(e.target.value));
