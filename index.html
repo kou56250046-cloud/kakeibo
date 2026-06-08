@@ -2398,28 +2398,63 @@
     }
 
     // ===== 価格比較 UI =====
+
+    // purchasesから商品別・店別の最安値を集計する
+    function buildStorePriceMap() {
+      const map = {}; // { productId: { store: { price, date } } }
+      for (const purchase of purchases) {
+        for (const item of (purchase.items || [])) {
+          const pid = item.productId;
+          if (!pid) continue;
+          if (!map[pid]) map[pid] = {};
+          const existing = map[pid][purchase.store];
+          if (!existing || item.price < existing.price) {
+            map[pid][purchase.store] = { price: item.price, date: purchase.date };
+          }
+        }
+      }
+      return map;
+    }
+
     function renderPriceCompareProductOptions() {
       const sel = document.getElementById("priceProductSelect");
       if (!sel) return;
       const cur = sel.value;
       sel.innerHTML = '<option value="">商品を選択してください</option>';
-      products.forEach(p => {
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = p.name;
-        if (p.id === cur) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      if (cur) renderPriceCompareResult(cur);
+
+      // 購入実績のあるproductIdだけ抽出
+      const usedIds = new Set();
+      for (const purchase of purchases) {
+        for (const item of (purchase.items || [])) {
+          if (item.productId) usedIds.add(item.productId);
+        }
+      }
+
+      products
+        .filter(p => usedIds.has(p.id))
+        .forEach(p => {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.name;
+          if (p.id === cur) opt.selected = true;
+          sel.appendChild(opt);
+        });
+
+      if (!sel.querySelector(`option[value="${cur}"]`)) {
+        sel.value = "";
+      }
+      if (sel.value) renderPriceCompareResult(sel.value);
+      else document.getElementById("priceCompareResult").innerHTML = "";
     }
 
     function renderPriceCompareResult(productId) {
       const el = document.getElementById("priceCompareResult");
       if (!el) return;
       if (!productId) { el.innerHTML = ""; return; }
-      const product = products.find(p => p.id === productId);
-      const storePrices = product?.storePrices || {};
-      const stores = Object.entries(storePrices)
+
+      // purchasesから直接集計（storePrices依存を排除）
+      const storeMap = buildStorePriceMap()[productId] || {};
+      const stores = Object.entries(storeMap)
         .map(([store, v]) => ({ store, price: v.price, date: v.date }))
         .sort((a, b) => a.price - b.price);
 
@@ -2611,6 +2646,7 @@
       generateAiAdvice();
       generateForecastTFJS();
       renderSavingInsight();
+      renderPriceCompareProductOptions();
     }
 
     // ===== 保存・削除ハンドラ =====
