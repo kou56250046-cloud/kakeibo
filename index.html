@@ -2846,25 +2846,42 @@
 
     // ===== 初期化 =====
     function initAuthHandlers() {
-      // PWAスタンドアロンモードではリダイレクト結果を処理
-      getRedirectResult(auth).catch(() => {});
+      // リダイレクト認証の結果を処理（リダイレクトから戻った場合）
+      getRedirectResult(auth).catch((e) => {
+        if (e && e.code !== 'auth/credential-already-in-use') {
+          console.warn('getRedirectResult error:', e.code);
+        }
+      });
 
       document.getElementById("googleSignInBtn").addEventListener("click", async () => {
         const btn = document.getElementById("googleSignInBtn");
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span>&nbsp;サインイン中…';
-        const isPWA = window.matchMedia("(display-mode: standalone)").matches || !!window.navigator.standalone;
+        const errEl = document.getElementById("authError");
+        errEl.textContent = "";
         try {
-          if (isPWA) {
-            await signInWithRedirect(auth, googleProvider);
-          } else {
-            await signInWithPopup(auth, googleProvider);
-          }
+          // iOS SafariのPWAではsignInWithRedirectが正常動作しないため
+          // 全環境でsignInWithPopupを優先し、ポップアップ不可時のみリダイレクトへ
+          await signInWithPopup(auth, googleProvider);
         } catch (e) {
-          document.getElementById("authError").textContent =
-            "ログインに失敗しました。ポップアップが閉じられたか接続を確認してください。";
-          btn.disabled = false;
-          btn.innerHTML = '<span class="icon">🔐</span>&nbsp;Googleでログイン';
+          if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
+            // ポップアップが許可されない環境のみリダイレクトで再試行
+            try {
+              await signInWithRedirect(auth, googleProvider);
+            } catch (e2) {
+              errEl.textContent = "ログインに失敗しました。接続状況を確認してください。";
+              btn.disabled = false;
+              btn.innerHTML = '<span class="icon">🔐</span>&nbsp;Googleでログイン';
+            }
+          } else if (e.code !== 'auth/popup-closed-by-user') {
+            errEl.textContent = "ログインに失敗しました。ポップアップが閉じられたか接続を確認してください。";
+            btn.disabled = false;
+            btn.innerHTML = '<span class="icon">🔐</span>&nbsp;Googleでログイン';
+          } else {
+            // ユーザーがポップアップを閉じた場合はボタンを戻すだけ
+            btn.disabled = false;
+            btn.innerHTML = '<span class="icon">🔐</span>&nbsp;Googleでログイン';
+          }
         }
       });
       document.getElementById("signOutBtn").addEventListener("click", () => {
